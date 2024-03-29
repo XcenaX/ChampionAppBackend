@@ -1,0 +1,1 @@
+from main.models.tournament import Tournament, Team, TournamentPlace, TournamentStage

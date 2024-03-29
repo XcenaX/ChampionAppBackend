@@ -1,22 +1,30 @@
-import random
-import string
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
-from main.serializers import UserSerializer
+
+from main.serializers.user import UserSerializer
+
+from champion_backend.settings import REFRESH_TOKEN_LIFETIME, EMAIL_HOST_USER
+
 from drf_yasg.utils import swagger_auto_schema
-from django.contrib.auth.hashers import check_password
 from drf_yasg import openapi
-from champion_backend.settings import EMAIL_CODE_LENGTH, REFRESH_TOKEN_LIFETIME
-from main.models import *
+
+from django.contrib.auth.hashers import check_password
 from django.db.models import Q
 from django.core.exceptions import ObjectDoesNotExist
+
 import re
-from django.core.mail import send_mail
 import json
+
+from django.core.mail import send_mail
+
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+
+from main.all_models.user import Confirmation
+from main.models import User
+
 
 class Login(APIView):
     @swagger_auto_schema(
@@ -373,17 +381,3 @@ class RestorePasswordAPIView(APIView):
             return Response({'success': True, 'message': 'Пароль успешно был изменен!'}, status=200)
         except:
             return Response({'success': False, 'message': 'Пользователя с таким Email не существует!'}, status=401)
-        
-
-class UserDetail(APIView):
-    permission_classes = [IsAuthenticated]
-
-    @swagger_auto_schema(
-        operation_description="Получение данных о пользователе",
-        responses={200: UserSerializer},        
-    )
-
-    def get(self, request):
-        user = request.user
-        serializer = UserSerializer(user)
-        return Response(serializer.data)

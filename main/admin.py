@@ -1,5 +1,12 @@
 from django.contrib import admin
 from main.models import *
+from main.all_models.court import *
+from main.all_models.match import *
+from main.all_models.sport import *
+from main.all_models.subscription import *
+from main.all_models.team import *
+from main.all_models.tournament import *
+from main.all_models.user import *
 # Register your models here.
 
 # User Group
