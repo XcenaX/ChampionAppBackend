@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from main.views.amateur_match import AmateurMatchViewSet
+from main.views.amateur_match import AmateurMatchViewSet, JoinMatch
 
 from main.views.user import UserDetail
 
@@ -20,5 +20,7 @@ urlpatterns = [
     path('send-email/', SendConfirmationCode.as_view(), name='send_email'),
     path('confirm-email/', ConfirmCode.as_view(), name='confirm_email'),
     path('send-restore-link/', SendRestoreLink.as_view(), name='send_restore_link'),
+
+    path('join-amateur-match/', JoinMatch.as_view(), name='join_amateur_match'),
     path('', include(router.urls)),
 ]
