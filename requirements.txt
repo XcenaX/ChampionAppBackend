@@ -16,3 +16,4 @@ PyJWT
 pytest
 python-dateutil
 uvicorn
+django-environ

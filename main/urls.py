@@ -8,4 +8,5 @@ urlpatterns = [
     path('register/', views.Register.as_view(), name='register'),
     path('send-email/', views.SendConfirmationCode.as_view(), name='send_email'),
     path('confirm-email/', views.ConfirmCode.as_view(), name='confirm_email'),
+    path('send-restore-link/', views.SendRestoreLink.as_view(), name='send_restore_link'),
 ]

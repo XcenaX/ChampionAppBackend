@@ -122,7 +122,6 @@ class Register(APIView):
             notify = data['notify']
             email = data['email']
             
-            print(notify)
             # degree = request.data['degree']
             # role = request.data['role']
         except:
@@ -171,6 +170,7 @@ class SendRestoreLink(APIView):
             required=['email'],
             properties={
                 'email':openapi.Schema(type=openapi.TYPE_STRING),                
+                'link':openapi.Schema(type=openapi.TYPE_STRING),                
             },
         ),
         responses={
@@ -194,15 +194,18 @@ class SendRestoreLink(APIView):
             ),            
         })
     def post(self, request):        
-        email = request.data['email']
-        
+        try:
+            data = json.loads(request.body)
+            email = data['email']
+            link = data['link']
+        except:
+            return Response({'success': False, 'message': 'Переданы не все параметры!'}, status=status.HTTP_401_UNAUTHORIZED) 
+            
         try:
             User.objects.get(email=email)
         except:
             return Response({'success': False, 'message': 'Такой пользователь не существует!'}, status=401)
         
-        # TODO Придумать в каком виде отправлять ссылку для восстановления пароля
-        link = "SOME LINK"
         html_message = render_to_string('reset_password.html', {'link': link})
         plain_message = strip_tags(html_message)
         send_mail(
@@ -248,8 +251,12 @@ class SendConfirmationCode(APIView):
                 }
             ),            
         })
-    def post(self, request):        
-        email = request.data['email']
+    def post(self, request): 
+        try:
+            data = json.loads(request.body)
+            email = data['email']
+        except:
+            return Response({'success': False, 'message': 'Переданы не все параметры!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
             return Response({'success': False, 'message': 'Неверный формат Email!'}, status=401)
@@ -296,9 +303,13 @@ class ConfirmCode(APIView):
                 }
             ),            
         })
-    def post(self, request):        
-        email = request.data['email']
-        code = request.data['code']
+    def post(self, request):                
+        try:
+            data = json.loads(request.body)
+            email = data['email']
+            code = data['code']
+        except:
+            return Response({'success': False, 'message': 'Переданы не все параметры!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
         try:
             confirmation = Confirmation.objects.get(email=email, code=code)
@@ -342,9 +353,13 @@ class RestorePasswordAPIView(APIView):
                 }
             ),            
         })
-    def post(self, request):        
-        password = request.data['password']
-        email = request.data['email']
+    def post(self, request):                
+        try:
+            data = json.loads(request.body)
+            password = data['password']
+            email = data['email']
+        except:
+            return Response({'success': False, 'message': 'Переданы не все параметры!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
             return Response({'success': False, 'message': 'Неверный формат Email!'}, status=401)
@@ -359,22 +374,6 @@ class RestorePasswordAPIView(APIView):
         except:
             return Response({'success': False, 'message': 'Пользователя с таким Email не существует!'}, status=401)
         
-
-class RefreshTokenView(APIView):
-    def get(self, request):
-        print(request.COOKIES)
-        refresh = request.COOKIES.get('refresh')
-        user_id = request.COOKIES.get('user_id')
-        user = User.objects.get(id=user_id)
-        ref = RefreshToken.for_user(user)
-        res = {'access': str(ref.access_token)}
-        response = Response(res)
-        response.set_cookie(key='refresh', value=str(ref))
-        return Response(
-            {'access': str(ref.access_token)},
-            status=200
-        )
-
 
 class UserDetail(APIView):
     permission_classes = [IsAuthenticated]
