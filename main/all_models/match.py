@@ -38,18 +38,23 @@ class MatchParticipant(models.Model):
 
 
 class AmateurMatch(models.Model):
-    name = models.CharField(max_length=255)
-    start = models.DateTimeField()
-    address = models.CharField(max_length=255)
-    lat = models.FloatField(blank=True, null=True)
-    lon = models.FloatField(blank=True, null=True)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_amateur_matches')
-    participants = models.ManyToManyField(User, related_name='opponents_amateur_matches')
-    requests = models.ManyToManyField(User, related_name='requests_amateur_matches')
-    max_participants = models.IntegerField(default=1)
-    auto_accept_participants = models.BooleanField(default=False)
-    enter_price = models.IntegerField()
+    name = models.CharField(max_length=255, verbose_name='Имя матча')
+    start = models.DateTimeField(verbose_name='Дата и время начала матча')
+    address = models.CharField(max_length=255, verbose_name='Адрес')
+    lat = models.FloatField(blank=True, null=True, verbose_name='Широта')
+    lon = models.FloatField(blank=True, null=True, verbose_name='Долгота')
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_amateur_matches', verbose_name='Организатор')
+    photo = models.ImageField(upload_to='amateur_matches_photos/', blank=True, null=True)
+    participants = models.ManyToManyField(User, blank=True, null=True, related_name='opponents_amateur_matches', verbose_name='Участники')
+    requests = models.ManyToManyField(User, blank=True, null=True, related_name='requests_amateur_matches', verbose_name='Запросы на участие')
+    max_participants = models.IntegerField(default=1, verbose_name='Макс кол-во участников')
+    auto_accept_participants = models.BooleanField(default=False, verbose_name='Автоматически принимать всех')
+    enter_price = models.IntegerField(verbose_name='Цена входа')
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, verbose_name='Вид спорта')
+    canceled = models.BooleanField(default=False)
+    
+    def is_full(self):
+        return self.max_participants == self.participants.count()+1
 
     class Meta:
         verbose_name = 'Любительский матч'

@@ -119,3 +119,5 @@ django_root/static
 
 # PyCharm config
 .idea/
+
+media
