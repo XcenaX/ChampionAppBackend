@@ -1,5 +1,6 @@
 from django.db import models
 from spacy import blank
+from traitlets import default
 from main.all_models.tournament import TournamentStage
 from main.models import User
 from main.all_models.sport import Sport
@@ -43,7 +44,10 @@ class AmateurMatch(models.Model):
     lat = models.FloatField(blank=True, null=True)
     lon = models.FloatField(blank=True, null=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_amateur_matches')
-    opponent = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='opponent_amateur_matches')
+    participants = models.ManyToManyField(User, related_name='opponents_amateur_matches')
+    requests = models.ManyToManyField(User, related_name='requests_amateur_matches')
+    max_participants = models.IntegerField(default=1)
+    auto_accept_participants = models.BooleanField(default=False)
     enter_price = models.IntegerField()
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, verbose_name='Вид спорта')
 

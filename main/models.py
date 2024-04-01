@@ -8,6 +8,7 @@ class User(AbstractUser):
     role = models.PositiveSmallIntegerField(choices=ROLE_CHOICES, default=0, verbose_name='Роль')
     email_code = models.CharField(max_length=5, blank=True, verbose_name='Email Код')
     interested_sports = models.ManyToManyField(Sport, verbose_name='Интересующие виды спорта')
+    avatar = models.ImageField(upload_to='users_avatars/', verbose_name='Аватары', blank=True, null=True)
     degree = models.PositiveSmallIntegerField(choices=DEGREE_CHOICES, default=0, verbose_name='Уровень мастерства')
     rating = models.IntegerField(default=0, verbose_name='Рейтинг')
     google = models.TextField(blank=True, verbose_name='Google')

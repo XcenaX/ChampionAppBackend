@@ -323,9 +323,7 @@ class ConfirmCode(APIView):
             confirmation = Confirmation.objects.get(email=email, code=code)
             confirmation.delete()
         except:
-            return Response({'success': False, 'message': 'Неверный код!'}, status=401)
-        
-        confirmation = Confirmation.objects.create(email=email)        
+            return Response({'success': False, 'message': 'Неверный код!'}, status=401)               
         
         return Response({'success': True, 'message': 'Email успешно подтвержден!'}, status=200)
 
