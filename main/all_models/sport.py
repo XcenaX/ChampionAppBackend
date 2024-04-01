@@ -3,7 +3,7 @@ from django.db import models
 class Sport(models.Model):
     name = models.CharField(max_length=255, verbose_name='Название')
     image = models.ImageField(upload_to='sports_images/', verbose_name='Изображение')
-    icon = models.ImageField(upload_to='sports_icons/', verbose_name='Иконка')
+    icon = models.ImageField(upload_to='sports_icons/', verbose_name='Иконка', blank=True, null=True)
 
     class Meta:
         verbose_name = 'Вид спорта'
