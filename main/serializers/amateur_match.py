@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from main.all_models.match import AmateurMatch
 from django.core.exceptions import ObjectDoesNotExist
+from main.all_models.sport import Sport
 from main.enums import AMATEUR_MATCH_STATUS
 from main.serializers.user import AmateurMatchUserSerializer
 from main.serializers.sport import SportField
@@ -33,6 +34,9 @@ class AmateurMatchSerializer(serializers.ModelSerializer):
         photo_base64 = validated_data.pop('photo_base64', None)
         if photo_base64:
             validated_data['photo'] = self._decode_photo(photo_base64)
+        else:
+            sport = validated_data.get('sport')
+            validated_data['photo'] = sport.image
         return super().create(validated_data)
 
     def update(self, instance, validated_data):

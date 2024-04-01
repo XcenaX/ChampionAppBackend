@@ -222,7 +222,7 @@ class RefuseMatchRequest(APIView):
             required=['match'],
             properties={
                 'match': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
-                'user': openapi.Schema(type=openapi.TYPE_INTEGER, description="id пользователя которого нужно принять на матч"),                
+                'user': openapi.Schema(type=openapi.TYPE_INTEGER, description="id пользователя которому нужно отказать"),                
             },
         ),
         responses={
@@ -265,3 +265,56 @@ class RefuseMatchRequest(APIView):
         except:
             return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
+
+class DeleteMatchParticipant(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Удалить участника из любительского матча',        
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['match'],
+            properties={
+                'match': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
+                'user': openapi.Schema(type=openapi.TYPE_INTEGER, description="id пользователя которого нужно удалить"),                
+            },
+        ),
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Пользователь был удален!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            match_id = data["match"]
+            user_id = data["user"]
+
+            match = AmateurMatch.objects.get(id=match_id)
+            user = User.objects.get(id=user_id)
+            
+            if not match.participants.contains(user):
+                return Response({'success': False, 'message': 'Переданного пользователя нет в списке участников!'}, status=status.HTTP_400_BAD_REQUEST) 
+        
+            match.participants.remove(user)
+            match.save()
+
+            return Response({'success': True, 'message': 'Пользователь был удален!'}, status=200)
+        except:
+            return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
