@@ -211,7 +211,6 @@ class AcceptMatchRequest(APIView):
             return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
 
-
 class RefuseMatchRequest(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -316,5 +315,62 @@ class DeleteMatchParticipant(APIView):
             match.save()
 
             return Response({'success': True, 'message': 'Пользователь был удален!'}, status=200)
+        except:
+            return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
+
+
+class AddMatchParticipant(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Добавить человека на любительский матч',        
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['match'],
+            properties={
+                'match': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
+                'user': openapi.Schema(type=openapi.TYPE_INTEGER, description="id пользователя которого нужно добавить на матч"),                
+            },
+        ),
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Пользователь был принят!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            match_id = data["match"]
+            user_id = data["user"]
+
+            match = AmateurMatch.objects.get(id=match_id)
+            user = User.objects.get(id=user_id)            
+
+            if match.participants.contains(user):
+                return Response({'success': False, 'message': 'Переданный пользователь уже учавствует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
+
+            if match.requests.contains(user):
+                match.requests.remove(user)
+
+            match.participants.add(user)
+            match.save()
+
+            return Response({'success': True, 'message': 'Пользователь добавлен на матч!'}, status=200)
         except:
             return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 

@@ -92,7 +92,7 @@ class UserExists(APIView):
             }
         ),
         responses={
-            200: openapi.Response('Токен успешно получен', examples={
+            200: openapi.Response('', examples={
                 "application/json": {
                     "exists": True                                          
                 },                    

@@ -7,38 +7,9 @@ from main.all_models.sport import Sport
 from main.enums import *
 
 
-class Match(models.Model):
-    tournament_stage = models.ForeignKey(TournamentStage, on_delete=models.CASCADE, related_name='matches', verbose_name='Этап турнира')
-    scheduled_start = models.DateTimeField(verbose_name='Запланированное время начала')
-    actual_start = models.DateTimeField(null=True, blank=True, verbose_name='Фактическое время начала')
-    duration = models.DurationField(null=True, blank=True, verbose_name='Продолжительность')
-    status = models.PositiveSmallIntegerField(choices=MATCH_STATUS, default=0, verbose_name='Статус')
-    winner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='won_matches', verbose_name='Победитель')
-
-    class Meta:
-        verbose_name = 'Матч'
-        verbose_name_plural = 'Матчи'
-
-    def __str__(self):
-        return f"Матч {self.id} ({self.tournament_stage.tournament.name})"
-
-
-class MatchParticipant(models.Model):
-    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='participants')
-    participant = models.ForeignKey(User, on_delete=models.CASCADE)
-    score = models.IntegerField(default=0, verbose_name='Счет')
-    result = models.PositiveSmallIntegerField(choices=MATCH_RESULT, null=True, blank=True, verbose_name='Результат')
-
-    class Meta:
-        verbose_name = 'Участник матча'
-        verbose_name_plural = 'Участники матчей'
-
-    def __str__(self):
-        return f"Участник {self.participant} в матче {self.match}"
-
-
 class AmateurMatch(models.Model):
     name = models.CharField(max_length=255, verbose_name='Имя матча')
+    description = models.CharField(max_length=500, default="", verbose_name='Описание матча')
     start = models.DateTimeField(verbose_name='Дата и время начала матча')
     address = models.CharField(max_length=255, verbose_name='Адрес')
     lat = models.FloatField(blank=True, null=True, verbose_name='Широта')
@@ -52,7 +23,8 @@ class AmateurMatch(models.Model):
     enter_price = models.IntegerField(verbose_name='Цена входа')
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, verbose_name='Вид спорта')
     canceled = models.BooleanField(default=False)
-    
+    city = models.TextField(default="", verbose_name='Город')
+
     def is_full(self):
         return self.max_participants == self.participants.count()+1
 
