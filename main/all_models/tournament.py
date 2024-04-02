@@ -29,7 +29,7 @@ class MatchParticipant(models.Model):
         verbose_name_plural = 'Участники матчей'
 
     def __str__(self):
-        return f"Участник {self.participant} в матче {self.match}"
+        return f"Участник {self.participant}"
 
 
 class Match(models.Model):
@@ -45,7 +45,7 @@ class Match(models.Model):
         verbose_name_plural = 'Матчи'
 
     def __str__(self):
-        return f"Матч {self.id} ({self.tournament_stage.tournament.name})"
+        return f"Матч {self.id}"
     
 
 class TournamentStage(models.Model):
@@ -76,8 +76,9 @@ class Tournament(models.Model):
     participants = models.ManyToManyField(User, related_name='participants_tournament', verbose_name='Участники')
     requests = models.ManyToManyField(User, related_name='requests_tournament', verbose_name='Запросы на участие')
     teams = models.ManyToManyField(Team, related_name='tournaments', verbose_name='Команды')
-    max_participants_amount = models.IntegerField(default=4, verbose_name='Максимальное количество участников')
+    max_participants = models.IntegerField(default=4, verbose_name='Максимальное количество участников')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    photo = models.ImageField(upload_to='tournaments_photos/', blank=True, null=True)
     stages = models.ManyToManyField(TournamentStage, related_name='stages', verbose_name='Этапы турнира')
 
     class Meta:

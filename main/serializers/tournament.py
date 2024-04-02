@@ -3,6 +3,7 @@ from main.all_models.tournament import Tournament, TournamentPlace, TournamentSt
 
 from rest_framework import serializers
 from main.all_models.sport import Sport
+from main.models import User
 from main.serializers.sport import SportField
 
 import base64
@@ -11,7 +12,7 @@ import uuid
 from django.core.exceptions import ObjectDoesNotExist
 
 from main.serializers.user import AmateurMatchUserSerializer
-
+from django.core.exceptions import ObjectDoesNotExist
 
 class TournamentPlaceField(serializers.RelatedField):
     queryset = TournamentPlace.objects.all()
@@ -21,24 +22,27 @@ class TournamentPlaceField(serializers.RelatedField):
 
     def to_internal_value(self, data):
         try:
-            return Sport.objects.get(id=data)
+            return TournamentPlace.objects.get(id=data)
         except ObjectDoesNotExist:
             raise serializers.ValidationError('Такой вид спорта не найден.')
         except TypeError:
             raise serializers.ValidationError('Неправильный формат данных для вида спорта.')
 
 
-class MatchParticipantSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = MatchParticipant
-        fields = ['participant', 'score', 'result']
-
 class MatchSerializer(serializers.ModelSerializer):
-    participants = MatchParticipantSerializer(many=True)
+    participants = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, write_only=True)
 
     class Meta:
         model = Match
         fields = ['scheduled_start', 'participants']
+    
+    def create(self, validated_data):
+        participants_ids = validated_data.pop('participants', [])
+        match = Match.objects.create(**validated_data)
+        for user_id in participants_ids:
+            participant = MatchParticipant.objects.create(participant=user_id)
+            match.participants.add(participant)
+        return match
 
 class TournamentStageSerializer(serializers.ModelSerializer):
     matches = MatchSerializer(many=True)
@@ -91,7 +95,7 @@ class TournamentSerializer(serializers.ModelSerializer):
         stages = []
         for stage_data in stages_data:
             matches_data = stage_data.pop('matches', [])
-            stage = TournamentStage.objects.create(**stage_data, tournament=tournament)
+            stage = TournamentStage.objects.create(**stage_data)
             matches = self.create_matches(stage, matches_data)
             
             for match in matches:
@@ -115,8 +119,8 @@ class TournamentSerializer(serializers.ModelSerializer):
 
     def create_match_participants(self, match, participants_data):
         participants = []
-        for participant_data in participants_data:
-            participant = MatchParticipant.objects.create(**participant_data)
+        for user in participants_data:
+            participant = MatchParticipant.objects.create(participant=user)
             participants.append(participant)
         return participants
 

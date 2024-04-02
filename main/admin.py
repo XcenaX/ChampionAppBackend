@@ -22,6 +22,7 @@ admin.site.register(Transaction)
 admin.site.register(Tournament)
 admin.site.register(TournamentPlace)
 admin.site.register(TournamentStage)
+admin.site.register(Match)
 admin.site.register(MatchParticipant)
 admin.site.register(New)
 
