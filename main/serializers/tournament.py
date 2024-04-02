@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from main.all_models.tournament import Tournament, TournamentPlace, TournamentStage, MatchParticipant, Match
+from main.all_models.team import Team
+from main.all_models.tournament import MatchTeam, Tournament, TournamentPlace, TournamentStage, MatchParticipant, Match
 
 from rest_framework import serializers
 from main.all_models.sport import Sport
@@ -31,17 +32,25 @@ class TournamentPlaceField(serializers.RelatedField):
 
 class MatchSerializer(serializers.ModelSerializer):
     participants = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, write_only=True)
+    teams = serializers.PrimaryKeyRelatedField(queryset=Team.objects.all(), many=True, write_only=True)
 
     class Meta:
         model = Match
-        fields = ['scheduled_start', 'participants']
+        fields = ['scheduled_start', 'participants', 'teams']
     
     def create(self, validated_data):
         participants_ids = validated_data.pop('participants', [])
+        teams_ids = validated_data.pop('teams', [])
         match = Match.objects.create(**validated_data)
+
         for user_id in participants_ids:
             participant = MatchParticipant.objects.create(participant=user_id)
             match.participants.add(participant)
+
+        for team_id in teams_ids:
+            team = MatchTeam.objects.create(team=team_id)
+            match.teams.add(team)
+
         return match
 
 class TournamentStageSerializer(serializers.ModelSerializer):

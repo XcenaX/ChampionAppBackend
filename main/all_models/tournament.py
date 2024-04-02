@@ -32,6 +32,19 @@ class MatchParticipant(models.Model):
         return f"Участник {self.participant}"
 
 
+class MatchTeam(models.Model):
+    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    score = models.IntegerField(default=0, verbose_name='Счет')
+    result = models.PositiveSmallIntegerField(choices=MATCH_RESULT, null=True, blank=True, verbose_name='Результат')
+
+    class Meta:
+        verbose_name = 'Команда матча'
+        verbose_name_plural = 'Команды матчей'
+
+    def __str__(self):
+        return f"Участник {self.participant}"
+    
+
 class Match(models.Model):
     scheduled_start = models.DateTimeField(verbose_name='Запланированное время начала')
     actual_start = models.DateTimeField(null=True, blank=True, verbose_name='Фактическое время начала')
@@ -39,6 +52,7 @@ class Match(models.Model):
     status = models.PositiveSmallIntegerField(choices=MATCH_STATUS, default=0, verbose_name='Статус')
     winner = models.ForeignKey(MatchParticipant, on_delete=models.SET_NULL, null=True, related_name='won_matches', verbose_name='Победитель')
     participants = models.ManyToManyField(MatchParticipant, related_name='tournament_participants', verbose_name='Участники турнира')
+    teams = models.ManyToManyField(MatchTeam, related_name='tournament_teams', verbose_name='Команды турнира')
     
     class Meta:
         verbose_name = 'Матч'
