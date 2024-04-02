@@ -5,7 +5,7 @@ from main.views.amateur_match import AcceptMatchRequest, AddMatchParticipant, Am
 from main.views.tournament import TournamentViewSet
 from main.views.user import UserDetail
 
-from main.views.auth import Login, UserExists
+from main.views.auth import Login, RestorePassword, UserExists
 from main.views.auth import Register
 from main.views.auth import SendConfirmationCode
 from main.views.auth import SendRestoreLink
@@ -18,11 +18,12 @@ router.register(r'tournaments', TournamentViewSet)
 urlpatterns = [
     path('user/', UserDetail.as_view(), name='user_detail'),
     path('user/exists/', UserExists.as_view(), name='user_exists'),
-    path('login/', Login.as_view(), name='login'),
-    path('register/', Register.as_view(), name='register'),
-    path('send-email/', SendConfirmationCode.as_view(), name='send_email'),
-    path('confirm-email/', ConfirmCode.as_view(), name='confirm_email'),
-    path('send-restore-link/', SendRestoreLink.as_view(), name='send_restore_link'),
+
+    path('auth/login/', Login.as_view(), name='login'),
+    path('auth/register/', Register.as_view(), name='register'),
+    path('auth/send-email/', SendConfirmationCode.as_view(), name='send_email'),
+    path('auth/confirm-email/', ConfirmCode.as_view(), name='confirm_email'),
+    path('auth/reset-password/', RestorePassword.as_view(), name='restore_password'),
 
     path('amateur-matches/join/', JoinMatch.as_view(), name='join_amateur_match'),
     path('match-request/accept/', AcceptMatchRequest.as_view(), name='accept_match_request'),

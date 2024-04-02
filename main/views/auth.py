@@ -355,15 +355,16 @@ class ConfirmCode(APIView):
         return Response({'success': True, 'message': 'Email успешно подтвержден!'}, status=200)
 
 
-class RestorePasswordAPIView(APIView):
+class RestorePassword(APIView):
     @swagger_auto_schema(
         operation_description='Изменить пароль на новый',
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['email', 'password'],
+            required=['email', 'password', 'confirm_password'],
             properties={
                 'email':openapi.Schema(type=openapi.TYPE_STRING),                
                 'password':openapi.Schema(type=openapi.TYPE_STRING),                            
+                'confirm_password':openapi.Schema(type=openapi.TYPE_STRING),                            
             },
         ),
         responses={
@@ -381,7 +382,7 @@ class RestorePasswordAPIView(APIView):
                 examples={
                     "application/json": {
                         'success': False,                        
-                        'message':'Такой пользователь не существует!'
+                        'message':'Ошибка!'
                     },                    
                 }
             ),            
@@ -390,15 +391,13 @@ class RestorePasswordAPIView(APIView):
         try:
             data = json.loads(request.body)
             password = data['password']
+            confirm_password = data['confirm_password']
             email = data['email']
         except:
             return Response({'success': False, 'message': 'Переданы не все параметры!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            return Response({'success': False, 'message': 'Неверный формат Email!'}, status=401)
-        
-        if re.search('[а-яА-Я]', password) or len(password) < 5:
-            return Response({'success': False, 'message': 'Неверный формат пароля!'}, status=401)
+        if password != confirm_password:
+            return Response({'success': False, 'message': 'Пароли не совпадают!'}, status=401)
 
         try:
             user = User.objects.get(Q(email=email) | Q(username=email))
