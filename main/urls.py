@@ -4,7 +4,7 @@ from main.views.amateur_match import AcceptMatchRequest, AmateurMatchViewSet, De
 
 from main.views.user import UserDetail
 
-from main.views.auth import Login
+from main.views.auth import Login, UserExists
 from main.views.auth import Register
 from main.views.auth import SendConfirmationCode
 from main.views.auth import SendRestoreLink
@@ -15,6 +15,7 @@ router.register(r'amateur-matches', AmateurMatchViewSet)
 
 urlpatterns = [
     path('user/', UserDetail.as_view(), name='user_detail'),
+    path('user/exists/', UserExists.as_view(), name='user_exists'),
     path('login/', Login.as_view(), name='login'),
     path('register/', Register.as_view(), name='register'),
     path('send-email/', SendConfirmationCode.as_view(), name='send_email'),

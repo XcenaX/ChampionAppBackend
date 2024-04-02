@@ -82,6 +82,33 @@ class Login(APIView):
             return Response({'success': False, 'message': 'Неверное имя пользователя или пароль'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+class UserExists(APIView):
+    @swagger_auto_schema(
+        operation_description="Существует ли пользователь в базе",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'email': openapi.Schema(type=openapi.TYPE_STRING, description='Email пользователя'),
+            }
+        ),
+        responses={
+            200: openapi.Response('Токен успешно получен', examples={
+                "application/json": {
+                    "exists": True                                          
+                },                    
+            })
+        }
+    )
+    def post(self, request, *args, **kwargs):
+        username = request.data['email']
+        
+        try:
+            user = User.objects.get(Q(username=username) | Q(email=username))
+            return Response({'exists': True}, status=200)
+        except ObjectDoesNotExist:
+            return Response({'exists': True}, status=200)
+            
+
 class Register(APIView):
     @swagger_auto_schema(
         operation_description='Регистрация',        
