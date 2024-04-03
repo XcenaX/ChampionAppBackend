@@ -263,7 +263,7 @@ class SendConfirmationCode(APIView):
             required=['email', 'email_type'],
             properties={
                 'email':openapi.Schema(type=openapi.TYPE_STRING),                
-                'email_type':openapi.Schema(type=openapi.TYPE_INTEGER),                
+                'email_type':openapi.Schema(type=openapi.TYPE_STRING),                
             },
         ),
         responses={
