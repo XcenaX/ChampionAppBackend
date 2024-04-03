@@ -4,13 +4,26 @@ from django.db import models
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from traitlets import default
 from champion_backend.settings import EMAIL_HOST_USER
 from django.contrib import admin
 
 
 class Confirmation(models.Model):
     email = models.CharField(max_length=100, default='')
+    email_type = models.CharField(max_length=2, default="0")
     code = models.CharField(max_length=6, default='')
+
+    EMAIL_TYPES = {
+        "0": {
+            "theme": "Подтверждение почты",
+            "message": "confirm_code.html"
+        },
+        "1": {
+            "theme": "Восстановление пароля",
+            "message": "reset_password.html"
+        },
+    }
 
     def save(self, *args, **kwargs):
         """Генерируем код"""
@@ -22,11 +35,14 @@ class Confirmation(models.Model):
             code_length = 6
             random_str = ''.join(random.choice(letters) for i in range(code_length))
             self.code = random_str
+
+            email_info = self.EMAIL_TYPES[self.email_type]
+
             try:
-                html_message = render_to_string('confirm_code.html', {'code': random_str})
+                html_message = render_to_string(email_info["message"], {'code': random_str})
                 plain_message = strip_tags(html_message)
                 send_mail(
-                    "Подтверждение почты",
+                    email_info["theme"],
                     plain_message,
                     EMAIL_HOST_USER,
                     [self.email],

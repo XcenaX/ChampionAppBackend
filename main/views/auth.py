@@ -260,9 +260,10 @@ class SendConfirmationCode(APIView):
         operation_description='Отправить код на почту',
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['email'],
+            required=['email', 'email_type'],
             properties={
                 'email':openapi.Schema(type=openapi.TYPE_STRING),                
+                'email_type':openapi.Schema(type=openapi.TYPE_INTEGER),                
             },
         ),
         responses={
@@ -290,6 +291,7 @@ class SendConfirmationCode(APIView):
         try:
             data = json.loads(request.body)
             email = data['email']
+            email_type = data['email_type']
         except:
             return Response({'success': False, 'message': 'Переданы не все параметры!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
@@ -297,12 +299,12 @@ class SendConfirmationCode(APIView):
             return Response({'success': False, 'message': 'Неверный формат Email!'}, status=401)
         
         try:
-            confirmation = Confirmation.objects.get(email=email)
+            confirmation = Confirmation.objects.get(email=email, email_type=email_type)
             confirmation.delete()
         except:
             pass
         
-        confirmation = Confirmation.objects.create(email=email)        
+        confirmation = Confirmation.objects.create(email=email, email_type=email_type)        
         
         return Response({'success': True, 'code': confirmation.code, 'message': 'Код для подтверждения почты был отправлен на ваш email!'}, status=200)
 
