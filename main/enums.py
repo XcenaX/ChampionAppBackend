@@ -1,3 +1,10 @@
+TOURNAMENT_TYPE = (
+    (0, 'Signle Elimination'),
+    (1, 'Double Elimination'),
+    (2, 'Round Robin'),
+    (3, 'Swiss'),
+)
+
 MATCH_STATUS = (
     (0, 'Запланирован'),
     (1, 'В процессе'),

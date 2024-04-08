@@ -404,6 +404,7 @@ class RestorePassword(APIView):
         try:
             user = User.objects.get(Q(email=email) | Q(username=email))
             user.set_password(password)
+            user.save()
             return Response({'success': True, 'message': 'Пароль успешно был изменен!'}, status=200)
         except:
             return Response({'success': False, 'message': 'Пользователя с таким Email не существует!'}, status=401)
