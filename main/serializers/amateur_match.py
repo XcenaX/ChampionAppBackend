@@ -23,7 +23,7 @@ class AmateurMatchSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = AmateurMatch
-        fields = ['name', 'start', 'address', 'lat', 'lon', 'owner', "canceled", 'enter_price', 'sport', 'auto_accept_participants', 'photo', 'photo_base64', 'max_participants', 'participants', 'requests' ]
+        fields = ['id', 'name', 'start', 'address', 'lat', 'lon', 'owner', "canceled", 'enter_price', 'sport', 'auto_accept_participants', 'photo', 'photo_base64', 'max_participants', 'participants', 'requests' ]
 
     def _decode_photo(self, photo_base64):
         format, imgstr = photo_base64.split(';base64,')
