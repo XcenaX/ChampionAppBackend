@@ -24,6 +24,7 @@ class AmateurMatch(models.Model):
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, verbose_name='Вид спорта')
     canceled = models.BooleanField(default=False)
     city = models.TextField(default="", verbose_name='Город')
+    verified = models.BooleanField(default=False, verbose_name='Подтвержден модерацией')
 
     def is_full(self):
         return self.max_participants == self.participants.count()+1

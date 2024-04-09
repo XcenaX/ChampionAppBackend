@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from main.views.amateur_match import AcceptMatchRequest, AddMatchParticipant, AmateurMatchViewSet, DeleteMatchParticipant, JoinMatch, RefuseMatchRequest
+from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchParticipant, AmateurMatchViewSet, DeclineMatch, DeleteMatchParticipant, JoinMatch, RefuseMatchRequest
 
 from main.views.tournament import TournamentViewSet
 from main.views.user import UserDetail
@@ -26,6 +26,9 @@ urlpatterns = [
     path('auth/reset-password/', RestorePassword.as_view(), name='restore_password'),
 
     path('amateur-matches/join/', JoinMatch.as_view(), name='join_amateur_match'),
+    path('amateur-matches/accept/', AcceptMatch.as_view(), name='accept_amateur_match'),
+    path('amateur-matches/decline/', DeclineMatch.as_view(), name='decline_amateur_match'),
+
     path('match-request/accept/', AcceptMatchRequest.as_view(), name='accept_match_request'),
     path('match-request/refuse/', RefuseMatchRequest.as_view(), name='refuse_match_request'),
     path('match-request/delete/', DeleteMatchParticipant.as_view(), name='delete_match_participant'),

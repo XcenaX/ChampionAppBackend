@@ -372,3 +372,106 @@ class AddMatchParticipant(APIView):
             return Response({'success': True, 'message': 'Пользователь добавлен на матч!'}, status=200)
         except:
             return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
+        
+
+class AcceptMatch(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Принять любительский матч как модератор',        
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['match'],
+            properties={
+                'match': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
+            },
+        ),
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Успешно принят матч!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            match_id = data["match"]
+
+            match = AmateurMatch.objects.get(id=match_id)
+            
+            if request.user.role == 3: # admin
+                match.verified = True
+                match.save()
+            else:
+                return Response({'success': False, 'message': 'Принять или Отклонить матч может только Админ!'}, status=status.HTTP_401_UNAUTHORIZED) 
+
+            return Response({'success': True, 'message': 'Успешно принят матч!'}, status=status.HTTP_200_OK) 
+
+        except:
+            return Response({'success': False, 'message': 'Матча с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
+
+
+class DeclineMatch(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Отклонить любительский матч как модератор',        
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['match'],
+            properties={
+                'match': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
+            },
+        ),
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Успешно принят матч!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            match_id = data["match"]
+
+            match = AmateurMatch.objects.get(id=match_id)
+            
+            if request.user.role == 3: # admin
+                match.delete()
+            else:
+                return Response({'success': False, 'message': 'Принять или Отклонить матч может только Админ!'}, status=status.HTTP_401_UNAUTHORIZED) 
+
+            return Response({'success': True, 'message': 'Успешно отклонен матч!'}, status=status.HTTP_200_OK) 
+
+        except:
+            return Response({'success': False, 'message': 'Матча с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
