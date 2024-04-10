@@ -1,4 +1,4 @@
-from main.all_models.tournament import Tournament, Team, TournamentPlace, TournamentStage
+from main.all_models.tournament import Match, Tournament, Team, TournamentPlace, TournamentStage
 
 from champion_backend.settings import EMAIL_HOST_USER
 from main.models import User
@@ -22,6 +22,9 @@ from django.core.mail import send_mail
 
 from main.serializers.tournament import TournamentSerializer
 
+import json
+
+from django.shortcuts import get_object_or_404
 
 class TournamentViewSet(viewsets.ModelViewSet):
     filter_backends = (DjangoFilterBackend,)
@@ -80,3 +83,108 @@ class TournamentViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class UpdateTournament(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Обновить матчи турнира',        
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'matches': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    description='Список матчей для обновления',
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID матча'),
+                            'scheduled_start': openapi.Schema(type=openapi.TYPE_STRING, format='date-time', description='Запланированное время начала матча'),
+                            'actual_start': openapi.Schema(type=openapi.TYPE_STRING, format='date-time', description='Фактическое время начала матча'),
+                            'participant_1_score': openapi.Schema(type=openapi.TYPE_INTEGER, description='Счет первого участника'),
+                            'participant_2_score': openapi.Schema(type=openapi.TYPE_INTEGER, description='Счет второго участника'),
+                        },
+                        required=['id']
+                    )
+                )
+            }
+        ),
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Турнир обновлен!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def patch(self, request, id):
+        try:
+            tournament = get_object_or_404(Tournament, id=id, owner=request.user)
+            data = json.loads(request.body)
+            matches_data = data.get("matches", [])
+
+            for match_data in matches_data:
+                match = get_object_or_404(Match, pk=match_data.get("id"), tournament_stage__tournament=tournament)
+                
+                match.scheduled_start = match_data.get("scheduled_start", match.scheduled_start)
+                match.actual_start = match_data.get("actual_start", match.actual_start)
+                
+                if "participant_1_score" in match_data and "participant_2_score" in match_data:
+                    participant_1_score = match_data.get("participant_1_score")
+                    participant_2_score = match_data.get("participant_2_score")
+                    match.participant1_score = participant_1_score
+                    match.participant2_score = participant_2_score
+                    
+                    if participant_1_score > participant_2_score:
+                        winner = match.participant1
+                        loser = match.participant2
+                    else:
+                        winner = match.participant2
+                        loser = match.participant1
+
+                    if tournament.bracket == 0: # single
+                        if match.next_match:
+                            if not match.next_match.participant1:
+                                match.next_match.participant1 = winner
+                            elif not match.next_match.participant2:
+                                match.next_match.participant2 = winner
+                            match.next_match.save()
+                    if tournament.bracket == 1: # double
+                        if match.next_match:
+                            if not match.next_match.participant1:
+                                match.next_match.participant1 = winner
+                            elif not match.next_match.participant2:
+                                match.next_match.participant2 = winner
+                            match.next_match.save()
+
+                        if match.next_lose_match:
+                            if not match.next_lose_match.participant1:
+                                match.next_lose_match.participant1 = loser
+                            elif not match.next_lose_match.participant2:
+                                match.next_lose_match.participant2 = loser
+                            match.next_lose_match.save()
+                    elif tournament.bracket == 2: # round
+                        pass
+                    elif tournament.bracket == 3: # swiss
+                        pass
+
+                match.save()
+
+            return Response({'success': True, 'message': 'Турнир обновлен!'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'success': False, 'message': f'Ошибка при обновлении: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)

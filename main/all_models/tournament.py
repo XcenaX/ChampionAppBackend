@@ -48,6 +48,8 @@ class Match(models.Model):
     # participants = models.ManyToManyField(Participant, related_name='tournament_participants', verbose_name='Участники турнира')
     participant1 = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name="match_participant1", blank=True, null=True, verbose_name="Участник 1")
     participant2 = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name="match_participant2", blank=True, null=True, verbose_name="Участник 2")
+    next_match = models.ForeignKey('Match', on_delete=models.CASCADE, related_name='next_match_on_win', blank=True, null=True, verbose_name="Следующий матч")
+    next_lose_match = models.ForeignKey('Match', on_delete=models.CASCADE, related_name='next_match_on_lose', blank=True, null=True, verbose_name="Следующий матч при поражении")
     
     class Meta:
         verbose_name = 'Матч'
@@ -94,6 +96,7 @@ class Tournament(models.Model):
     photo = models.ImageField(upload_to='tournaments_photos/', blank=True, null=True)
     stages = models.ManyToManyField(TournamentStage, related_name='stages', verbose_name='Этапы турнира')
     bracket = models.PositiveSmallIntegerField(choices=TOURNAMENT_TYPE, null=True, blank=True, verbose_name='Тип сетки турнира')
+    verified = models.BooleanField(default=False, verbose_name='Подтверждено модератором')
 
     class Meta:
         verbose_name = 'Турнир'

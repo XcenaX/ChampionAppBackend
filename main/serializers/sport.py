@@ -17,3 +17,9 @@ class SportField(serializers.RelatedField):
         except TypeError:
             raise serializers.ValidationError('Неправильный формат данных для вида спорта.')
 
+
+
+class SportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Sport
+        fields = ['id', 'name', 'image', 'icon']

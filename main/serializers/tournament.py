@@ -144,94 +144,49 @@ class TournamentSerializer(serializers.ModelSerializer):
         return tournament
 
     def create_single_elimination_bracket(self, tournament, matches_data):
-        all_participants = list(tournament.participants.all())  
-        num_participants = len(all_participants)
+        num_participants = len(tournament.participants.all())
         num_rounds = math.ceil(math.log2(num_participants))
-        matches_in_round = num_participants // 2
-        
-        selected_participants = []
-        for match_data in matches_data:
-            for participant_id in match_data.get('participants', []):
-                for find_participant in all_participants:
-                    if find_participant.user:
-                        if find_participant.user.id == participant_id:
-                            selected_participants.append(find_participant)
-                            break
-                    else:
-                        if find_participant.team.id == participant_id:
-                            selected_participants.append(find_participant)                            
-                            break        
-        unselected_participants = [item for item in all_participants if item not in selected_participants]
+        current_matches = []
 
         for round_number in range(1, num_rounds + 1):
-            if round_number == num_rounds:
-                stage_name = "Финал"
-            elif round_number == num_rounds - 1:
-                stage_name = "Полуфинал"
-            else:
-                stage_name = f"Этап {round_number}"
-            
+            stage_name = self.get_stage_name(round_number, num_rounds)
             stage = TournamentStage.objects.create(name=stage_name)
-            
+            new_matches = []
+
             if round_number == 1:
-                for match_data in matches_data:
-                    
-                    participant1 = None
-                    participant2 = None       
+                # Случайный выбор участников для первого раунда, если не указаны
+                unselected_participants = list(tournament.participants.all())
+                random.shuffle(unselected_participants)
 
-                    participants_ids = match_data.get('participants', [])                    
+                while unselected_participants:
+                    participant1 = unselected_participants.pop() if unselected_participants else None
+                    participant2 = unselected_participants.pop() if unselected_participants else None
 
-                    if not participants_ids:
-                        random_participant_index = random.randint(0, len(unselected_participants)-1)
-                        participant1 = unselected_participants.pop(random_participant_index)
-                        
-                        random_participant_index = random.randint(0, len(unselected_participants)-1)
-                        participant2 = unselected_participants.pop(random_participant_index)                        
-                    
-                    else:
-                        participant_id_1 = participants_ids[0]
-                        for participant in selected_participants:
-                            if participant.user:
-                                if participant.user.id == participant_id_1:
-                                    participant1 = participant
-                                    selected_participants.remove(participant)
-                                    break
-                            else:
-                                if participant.team.id == participant_id_1:
-                                    participant1 = participant
-                                    selected_participants.remove(participant)
-                                    break             
-                        
-                        participant_id_2 = participants_ids[1]
-                        for participant in selected_participants:
-                            if participant.user:
-                                if participant.user.id == participant_id_2:
-                                    participant2 = participant
-                                    selected_participants.remove(participant)
-                                    break           
-                            else:
-                                if participant.team.id == participant_id_2:
-                                    participant2 = participant
-                                    selected_participants.remove(participant)
-                                    break                                                                                                                              
-                    
                     match = Match.objects.create(
-                        scheduled_start=match_data.get('scheduled_start', None),
                         participant1=participant1,
                         participant2=participant2
-                    )                                    
-
+                    )
+                    new_matches.append(match)
                     stage.matches.add(match)
             else:
-                # Для последующих этапов создаются пустые матчи
-                for _ in range(matches_in_round):
-                    match = Match.objects.create()
-                    stage.matches.add(match)
-            
+                for match in current_matches:
+                    new_match = Match.objects.create()
+                    match.next_match = new_match
+                    match.save()
+                    new_matches.append(new_match)
+                    stage.matches.add(new_match)
+
+            current_matches = new_matches
             tournament.stages.add(stage)
 
-            matches_in_round = max(matches_in_round // 2, 1)
-
+    def get_stage_name(self, round_number, num_rounds):
+        if round_number == num_rounds:
+            return "Финал"
+        elif round_number == num_rounds - 1:
+            return "Полуфинал"
+        else:
+            return f"Этап {round_number}"
+    
     def create_double_elimination_bracket(self, tournament, stages_data):
         pass
 
