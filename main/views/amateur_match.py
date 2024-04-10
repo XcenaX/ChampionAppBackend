@@ -36,6 +36,7 @@ class AmateurMatchViewSet(viewsets.ModelViewSet):
             type=openapi.TYPE_OBJECT,
             properties={
                 'name': openapi.Schema(type=openapi.TYPE_STRING),
+                'description': openapi.Schema(type=openapi.TYPE_STRING, description='Описание'),                
                 'start': openapi.Schema(
                     type=openapi.TYPE_STRING, 
                     description='Дата и время начала в формате YYYY-MM-DDTHH:MM:SSZ',
