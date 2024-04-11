@@ -4,7 +4,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from main.all_models.sport import Sport
 from main.enums import AMATEUR_MATCH_STATUS
 from main.serializers.user import AmateurMatchUserSerializer
-from main.serializers.sport import SportField
+from main.serializers.sport import SportField, SportSerializer
 
 import base64
 from django.core.files.base import ContentFile
@@ -14,7 +14,7 @@ class AmateurMatchSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()
     participants = serializers.SerializerMethodField()
     requests = serializers.SerializerMethodField()
-    sport = SportField(many=False, read_only=False, required=True)
+    sport = SportSerializer(many=False, read_only=False, required=True)
     lat = serializers.FloatField(required=False, allow_null=True)
     lon = serializers.FloatField(required=False, allow_null=True)
     photo = serializers.CharField(write_only=True, required=False)
