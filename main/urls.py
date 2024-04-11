@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchParticipant, AmateurMatchViewSet, DeclineMatch, DeleteMatchParticipant, JoinMatch, RefuseMatchRequest
+from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchParticipant, AmateurMatchViewSet, DeclineMatch, DeleteMatchParticipant, JoinMatch, MyMatches, RefuseMatchRequest
 
 from main.views.city import CityRequest
 from main.views.sport import SportViewSet
@@ -33,6 +33,7 @@ urlpatterns = [
     path('amateur-matches/join/', JoinMatch.as_view(), name='join_amateur_match'),
     path('amateur-matches/accept/', AcceptMatch.as_view(), name='accept_amateur_match'),
     path('amateur-matches/decline/', DeclineMatch.as_view(), name='decline_amateur_match'),
+    path('amateur-matches/my/', MyMatches.as_view(), name='my_matches'),
 
     path('match-request/accept/', AcceptMatchRequest.as_view(), name='accept_match_request'),
     path('match-request/refuse/', RefuseMatchRequest.as_view(), name='refuse_match_request'),

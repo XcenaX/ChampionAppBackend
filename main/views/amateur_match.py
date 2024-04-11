@@ -81,7 +81,20 @@ class AmateurMatchViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-    
+
+
+class MyMatches(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Мои матчи',                
+    )
+
+    def get(self, request):
+        matches = AmateurMatch.objects.filter(owner=request.user)
+        serializer = AmateurMatchSerializer(matches, many=True)
+        return Response({"matches": serializer.data}, status=200)
+            
 
 class JoinMatch(APIView):
     permission_classes = [IsAuthenticated]
