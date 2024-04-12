@@ -15,7 +15,7 @@ class AmateurMatch(models.Model):
     lat = models.FloatField(blank=True, null=True, verbose_name='Широта')
     lon = models.FloatField(blank=True, null=True, verbose_name='Долгота')
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_amateur_matches', verbose_name='Организатор')
-    photo = models.ImageField(upload_to='amateur_matches_photos/', blank=True, null=True)
+    # photo = models.ImageField(upload_to='amateur_matches_photos/', blank=True, null=True)
     participants = models.ManyToManyField(User, blank=True, null=True, related_name='opponents_amateur_matches', verbose_name='Участники')
     requests = models.ManyToManyField(User, blank=True, null=True, related_name='requests_amateur_matches', verbose_name='Запросы на участие')
     max_participants = models.IntegerField(default=1, verbose_name='Макс кол-во участников')
@@ -35,3 +35,8 @@ class AmateurMatch(models.Model):
 
     def __str__(self):
         return f"Матч: {self.name}"
+
+
+class MatchPhoto(models.Model):
+    match = models.ForeignKey(AmateurMatch, related_name='photos', on_delete=models.CASCADE)
+    photo = models.FileField(upload_to='amateur_matches_photos/')

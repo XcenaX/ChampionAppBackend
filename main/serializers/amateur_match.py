@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from main.all_models.match import AmateurMatch
+from main.all_models.match import AmateurMatch, MatchPhoto
 from django.core.exceptions import ObjectDoesNotExist
 from main.all_models.sport import Sport
 from main.enums import AMATEUR_MATCH_STATUS
@@ -10,40 +10,54 @@ import base64
 from django.core.files.base import ContentFile
 import uuid
 
+class MatchPhotoSerializer(serializers.ModelSerializer):
+    photo = serializers.FileField(use_url=True)
+
+    class Meta:
+        model = MatchPhoto
+        fields = ['photo']
+
 class AmateurMatchSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()
     participants = serializers.SerializerMethodField()
     requests = serializers.SerializerMethodField()
-    sport = SportSerializer(many=False, read_only=False, required=True)
+    photos = MatchPhotoSerializer(many=True, read_only=True)
+    photos_base64 = serializers.ListField(
+        child=serializers.CharField(), write_only=True, required=False
+    )
+    sport = SportField(many=False, read_only=False, required=True)
     lat = serializers.FloatField(required=False, allow_null=True)
     lon = serializers.FloatField(required=False, allow_null=True)
-    photo = serializers.CharField(write_only=True, required=False)
-    photo_base64 = serializers.CharField(write_only=True, required=False)
     max_participants = serializers.IntegerField(min_value=2)
     
     class Meta:
         model = AmateurMatch
-        fields = ['id', 'name', 'description', 'start', 'address', 'city', 'lat', 'lon', 'owner', "canceled", 'enter_price', 'sport', 'auto_accept_participants', 'photo', 'photo_base64', 'max_participants', 'participants', 'requests' ]
-
+        fields = ['id', 'name', 'description', 'start', 'address', 'city', 'lat', 'lon', 'owner', "canceled", 'enter_price', 'sport', 'auto_accept_participants', 'photos', 'photos_base64', 'max_participants', 'participants', 'requests' ]                
+    
     def _decode_photo(self, photo_base64):
         format, imgstr = photo_base64.split(';base64,')
         ext = format.split('/')[-1]
         return ContentFile(base64.b64decode(imgstr), name=f"{uuid.uuid4()}.{ext}")
 
     def create(self, validated_data):
-        photo_base64 = validated_data.pop('photo_base64', None)
-        if photo_base64:
-            validated_data['photo'] = self._decode_photo(photo_base64)
-        else:
-            sport = validated_data.get('sport')
-            validated_data['photo'] = sport.image
-        return super().create(validated_data)
+        photos_base64 = validated_data.pop('photos_base64', [])
+        match = super().create(validated_data)
+        photos = []
+        for photo_base64 in photos_base64:
+            photo = self._decode_photo(photo_base64)
+            photos.append(MatchPhoto(match=match, photo=photo))
+        MatchPhoto.objects.bulk_create(photos)  # Более эффективное создание записей
+        return match
+
 
     def update(self, instance, validated_data):
-        photo_base64 = validated_data.pop('photo_base64', None)
-        if photo_base64:
-            instance.photo.delete()
-            instance.photo = self._decode_photo(photo_base64)
+        photos_base64 = validated_data.pop('photos_base64', [])
+        # Удаляем старые фотографии, если были предоставлены новые
+        if photos_base64:
+            instance.photos.all().delete()
+            for photo_base64 in photos_base64:
+                photo = self._decode_photo(photo_base64)
+                MatchPhoto.objects.create(match=instance, photo=photo)
         return super().update(instance, validated_data)
 
     def get_owner(self, obj):

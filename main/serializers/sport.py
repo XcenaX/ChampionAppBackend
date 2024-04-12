@@ -7,7 +7,12 @@ class SportField(serializers.RelatedField):
     queryset = Sport.objects.all()
     
     def to_representation(self, value):
-        return value.name
+        return {
+            "id": value.id,
+            "name": value.name,
+            "image": value.image.url if value.image else None,
+            "icon": value.icon.url if value.icon else None
+        }
 
     def to_internal_value(self, data):
         try:
@@ -20,6 +25,9 @@ class SportField(serializers.RelatedField):
 
 
 class SportSerializer(serializers.ModelSerializer):
+    image = serializers.FileField(use_url=True)
+    icon = serializers.FileField(use_url=True, allow_null=True, required=False)
+
     class Meta:
         model = Sport
         fields = ['id', 'name', 'image', 'icon']
