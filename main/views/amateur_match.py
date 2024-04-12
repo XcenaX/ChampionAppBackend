@@ -47,7 +47,14 @@ class AmateurMatchViewSet(viewsets.ModelViewSet):
                 'enter_price': openapi.Schema(type=openapi.TYPE_INTEGER, description='Ставка'),
                 'sport': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID спорта'),
                 'max_participants': openapi.Schema(type=openapi.TYPE_INTEGER, description='Макс кол-во участников'),
-                'photo_base64': openapi.Schema(type=openapi.TYPE_STRING, description='Фото матча в формате base64'),
+                'photos_base64': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    description='Список фото матча в формате base64',
+                    items=openapi.Schema(
+                        type=openapi.TYPE_STRING,
+                        description='Фото в формате base64'
+                    )
+                ),
                 'auto_accept_participants': openapi.Schema(type=openapi.TYPE_INTEGER, description='Автоматически принимать всех участников'),                
                 'lat': openapi.Schema(type=openapi.FORMAT_FLOAT, description='Широта'),
                 'lon': openapi.Schema(type=openapi.FORMAT_FLOAT, description='Долгота'),                
