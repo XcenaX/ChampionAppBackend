@@ -43,7 +43,7 @@ class Login(APIView):
         unhashed_pass = request.data['password']
         # Check username exists
         try:
-            user = User.objects.get(Q(username=username) | Q(email=username))
+            user = User.objects.get(Q(username__iexact=username) | Q(email__iexact=username))
         except ObjectDoesNotExist:
             user = None
         if not user:            
@@ -184,7 +184,7 @@ class Register(APIView):
             return Response({'success': False, 'message': 'Неверное ФИО!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
         try:
-            User.objects.get(Q(email=email) | Q(username=email))            
+            User.objects.get(Q(email__iexact=email) | Q(username__iexact=email))            
             return Response({'success': False, 'message': 'Такой пользователь уже существует!'}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
             pass
