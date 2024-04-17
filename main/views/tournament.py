@@ -102,6 +102,7 @@ class UpdateTournament(APIView):
                             'id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID матча'),
                             'scheduled_start': openapi.Schema(type=openapi.TYPE_STRING, format='date-time', description='Запланированное время начала матча'),
                             'actual_start': openapi.Schema(type=openapi.TYPE_STRING, format='date-time', description='Фактическое время начала матча'),
+                            'actual_end': openapi.Schema(type=openapi.TYPE_STRING, format='date-time', description='Фактическое время окончания матча'),                            
                             'participant_1_score': openapi.Schema(type=openapi.TYPE_INTEGER, description='Счет первого участника'),
                             'participant_2_score': openapi.Schema(type=openapi.TYPE_INTEGER, description='Счет второго участника'),
                         },
@@ -138,16 +139,17 @@ class UpdateTournament(APIView):
             matches_data = data.get("matches", [])
 
             for match_data in matches_data:
-                match = get_object_or_404(Match, pk=match_data.get("id"), tournament_stage__tournament=tournament)
+                match = get_object_or_404(Match, pk=match_data.get("id"))
                 
                 match.scheduled_start = match_data.get("scheduled_start", match.scheduled_start)
                 match.actual_start = match_data.get("actual_start", match.actual_start)
+                match.actual_end = match_data.get("actual_end", match.actual_end)
                 
                 if "participant_1_score" in match_data and "participant_2_score" in match_data:
                     participant_1_score = match_data.get("participant_1_score")
                     participant_2_score = match_data.get("participant_2_score")
-                    match.participant1_score = participant_1_score
-                    match.participant2_score = participant_2_score
+                    match.participant1.score = participant_1_score
+                    match.participant2.score = participant_2_score
                     
                     if participant_1_score > participant_2_score:
                         winner = match.participant1
@@ -155,6 +157,9 @@ class UpdateTournament(APIView):
                     else:
                         winner = match.participant2
                         loser = match.participant1
+
+                    match.winner = winner
+                    match.status = 2
 
                     if tournament.bracket == 0: # single
                         if match.next_match:
@@ -182,6 +187,8 @@ class UpdateTournament(APIView):
                     elif tournament.bracket == 3: # swiss
                         pass
 
+                match.participant1.save()
+                match.participant2.save()                
                 match.save()
 
             return Response({'success': True, 'message': 'Турнир обновлен!'}, status=status.HTTP_200_OK)

@@ -42,7 +42,7 @@ class Participant(models.Model):
 class Match(models.Model):
     scheduled_start = models.DateTimeField(verbose_name='Запланированное время начала', blank=True, null=True)
     actual_start = models.DateTimeField(null=True, blank=True, verbose_name='Фактическое время начала')
-    duration = models.DurationField(null=True, blank=True, verbose_name='Продолжительность')
+    actual_end = models.DateTimeField(null=True, blank=True, verbose_name='Фактическое время окончания')    
     status = models.PositiveSmallIntegerField(choices=MATCH_STATUS, default=0, verbose_name='Статус')
     winner = models.ForeignKey(Participant, on_delete=models.SET_NULL, null=True, related_name='won_matches', verbose_name='Победитель')
     # participants = models.ManyToManyField(Participant, related_name='tournament_participants', verbose_name='Участники турнира')
@@ -90,6 +90,7 @@ class Tournament(models.Model):
     rules = models.TextField(verbose_name='Правила', default="")
     participants = models.ManyToManyField(Participant, related_name='participants_tournament', verbose_name='Участники')
     requests = models.ManyToManyField(User, related_name='requests_tournament', verbose_name='Запросы на участие')
+    moderators = models.ManyToManyField(User, related_name='moderators_tournament', verbose_name='Модераторы турнира')
     teams = models.ManyToManyField(Team, related_name='tournaments', verbose_name='Команды')
     max_participants = models.IntegerField(default=4, verbose_name='Максимальное количество участников')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
@@ -97,6 +98,7 @@ class Tournament(models.Model):
     stages = models.ManyToManyField(TournamentStage, related_name='stages', verbose_name='Этапы турнира')
     bracket = models.PositiveSmallIntegerField(choices=TOURNAMENT_TYPE, null=True, blank=True, verbose_name='Тип сетки турнира')
     verified = models.BooleanField(default=False, verbose_name='Подтверждено модератором')
+    auto_accept_participants = models.BooleanField(default=False, verbose_name='Автоматически принимать всех')
 
     class Meta:
         verbose_name = 'Турнир'

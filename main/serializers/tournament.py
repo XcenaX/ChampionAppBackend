@@ -14,7 +14,7 @@ from django.core.files.base import ContentFile
 import uuid
 from django.core.exceptions import ObjectDoesNotExist
 
-from main.serializers.user import AmateurMatchUserSerializer, ParticipantSerializer
+from main.serializers.user import AmateurMatchUserSerializer, ParticipantSerializer, UserSerializer
 from django.core.exceptions import ObjectDoesNotExist
 
 from django.db import transaction
@@ -34,8 +34,7 @@ class TournamentPlaceField(serializers.RelatedField):
             raise serializers.ValidationError('Неправильный формат данных для вида спорта.')
 
 
-
-class MatchSerializer(serializers.ModelSerializer):
+class NextMatchSerializer(serializers.ModelSerializer):
     participant1 = ParticipantSerializer(many=False, required=False)
     participant2 = ParticipantSerializer(many=False, required=False)
     winner = ParticipantSerializer(many=False, required=False)
@@ -44,7 +43,23 @@ class MatchSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Match
-        fields = ['scheduled_start', 'actual_start', 'status', 'duration', 'participant1', 'participant2', 'winner', 'participants']
+        fields = ['scheduled_start', 'actual_start', 'actual_end', 'status', 'participant1', 'participant2', 'winner', 'participants']
+
+
+class MatchSerializer(serializers.ModelSerializer):
+    participant1 = ParticipantSerializer(many=False, required=False)
+    participant2 = ParticipantSerializer(many=False, required=False)
+    winner = ParticipantSerializer(many=False, required=False)
+    participants = serializers.ListField(child=serializers.IntegerField(), write_only=True)
+    scheduled_start = serializers.DateTimeField()
+    actual_start = serializers.DateTimeField()
+    actual_end = serializers.DateTimeField()
+    next_match = NextMatchSerializer(many=False, required=False, read_only=True)
+    next_lose_match = NextMatchSerializer(many=False, required=False, read_only=True)
+    
+    class Meta:
+        model = Match
+        fields = ['scheduled_start', 'actual_start', 'actual_end', 'status', 'participant1', 'participant2', 'winner', 'participants', 'next_match', 'next_lose_match']
     
     @transaction.atomic
     def create(self, validated_data):
@@ -75,6 +90,7 @@ class TournamentSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()
     place = TournamentPlaceField(many=False, read_only=False, required=True)
     participants = serializers.SerializerMethodField()
+    moderators = serializers.SerializerMethodField()
     requests = serializers.SerializerMethodField()
     sport = SportField(many=False, read_only=False, required=True)
     photo = serializers.CharField(write_only=True, required=False)
@@ -89,7 +105,7 @@ class TournamentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tournament
-        fields = ['name', 'start', 'end', 'owner', 'enter_price', 'sport', 'photo', 'photo_base64', 'max_participants', 'participants', 'requests', 'prize_pool', 'place', 'rules', 'matches', 'bracket', 'teams', 'players', 'stages']
+        fields = ['name', 'start', 'end', 'owner', 'enter_price', 'sport', 'photo', 'photo_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'requests', 'prize_pool', 'place', 'rules', 'matches', 'bracket', 'teams', 'players', 'stages']
 
     def _decode_photo(self, photo_base64):
         format, imgstr = photo_base64.split(';base64,')
@@ -147,6 +163,11 @@ class TournamentSerializer(serializers.ModelSerializer):
         num_participants = len(tournament.participants.all())
         num_rounds = math.ceil(math.log2(num_participants))
         current_matches = []
+        unselected_participants = list(tournament.participants.all())
+        
+        is_players_are_users = False
+        if unselected_participants[0].user:
+            is_players_are_users = True
 
         for round_number in range(1, num_rounds + 1):
             stage_name = self.get_stage_name(round_number, num_rounds)
@@ -154,31 +175,51 @@ class TournamentSerializer(serializers.ModelSerializer):
             new_matches = []
 
             if round_number == 1:
-                # Случайный выбор участников для первого раунда, если не указаны
-                unselected_participants = list(tournament.participants.all())
-                random.shuffle(unselected_participants)
+                for match_info in matches_data:
+                    scheduled_start = match_info.get('scheduled_start')
+                    participants_ids = match_info.get('participants', [])
+                    print(participants_ids)
+                    participant1 = None
+                    participant2 = None
 
-                while unselected_participants:
-                    participant1 = unselected_participants.pop() if unselected_participants else None
-                    participant2 = unselected_participants.pop() if unselected_participants else None
+                    if participants_ids:
+                        if is_players_are_users:
+                            participant1 = next((p for p in unselected_participants if p.user.id == participants_ids[0]), None)
+                            participant2 = next((p for p in unselected_participants if p.user.id == participants_ids[1]), None)
+                        else:
+                            participant1 = next((p for p in unselected_participants if p.team.id == participants_ids[0]), None)
+                            participant2 = next((p for p in unselected_participants if p.team.id == participants_ids[1]), None)
+
+                        if participant1:
+                            unselected_participants.remove(participant1)
+                        if participant2:
+                            unselected_participants.remove(participant2)
+                    else:
+                        participant1 = unselected_participants.pop() if unselected_participants else None
+                        participant2 = unselected_participants.pop() if unselected_participants else None
 
                     match = Match.objects.create(
+                        scheduled_start=scheduled_start,
                         participant1=participant1,
                         participant2=participant2
                     )
-                    new_matches.append(match)
                     stage.matches.add(match)
+                    new_matches.append(match)
             else:
-                for match in current_matches:
+                for i in range(0, len(current_matches), 2):
                     new_match = Match.objects.create()
-                    match.next_match = new_match
-                    match.save()
+                    current_matches[i].next_match = new_match
+                    if i + 1 < len(current_matches):
+                        current_matches[i + 1].next_match = new_match
+                    current_matches[i].save()
+                    if i + 1 < len(current_matches):
+                        current_matches[i + 1].save()
                     new_matches.append(new_match)
                     stage.matches.add(new_match)
 
             current_matches = new_matches
             tournament.stages.add(stage)
-
+    
     def get_stage_name(self, round_number, num_rounds):
         if round_number == num_rounds:
             return "Финал"
@@ -187,8 +228,98 @@ class TournamentSerializer(serializers.ModelSerializer):
         else:
             return f"Этап {round_number}"
     
-    def create_double_elimination_bracket(self, tournament, stages_data):
-        pass
+    def create_double_elimination_bracket(self, tournament, matches_data):
+        num_participants = len(tournament.participants.all())
+        num_rounds_upper = math.ceil(math.log2(num_participants))
+        num_rounds_lower = num_rounds_upper - 1
+
+        unselected_participants = list(tournament.participants.all())
+        
+        is_players_are_users = False
+        if unselected_participants[0].user:
+            is_players_are_users = True
+
+        # Списки для хранения матчей в верхней и нижней сетке
+        upper_matches = [[] for _ in range(num_rounds_upper)]
+        lower_matches = [[] for _ in range(num_rounds_lower + 1)]  # +1 для дополнительного раунда в нижней сетке
+
+        
+        for round_number in range(num_rounds_upper):
+            stage = TournamentStage.objects.create(name=f"Верхняя сетка - Этап {round_number + 1}")
+            if round_number == 0:
+                # Создание начальных матчей из matches_data
+                for match_info in matches_data:
+                    participants_ids = match_info.get('participants', [])
+
+                    participant1 = None
+                    participant2 = None
+
+                    if participants_ids:
+                        if is_players_are_users:
+                            participant1 = next((p for p in unselected_participants if p.user.id == participants_ids[0]), None)
+                            participant2 = next((p for p in unselected_participants if p.user.id == participants_ids[1]), None)
+                        else:
+                            participant1 = next((p for p in unselected_participants if p.team.id == participants_ids[0]), None)
+                            participant2 = next((p for p in unselected_participants if p.team.id == participants_ids[1]), None)
+
+                        if participant1 in unselected_participants:
+                            unselected_participants.remove(participant1)
+                        if participant2 in unselected_participants:
+                            unselected_participants.remove(participant2)
+                    else:
+                        participant1 = unselected_participants.pop() if unselected_participants else None
+                        participant2 = unselected_participants.pop() if unselected_participants else None
+
+                    match = Match.objects.create(
+                        scheduled_start=match_info.get('scheduled_start'),
+                        participant1=participant1,
+                        participant2=participant2,                            
+                    )
+                    stage.matches.add(match)
+                    upper_matches[0].append(match)
+            else:
+                # Создание следующих раундов для победителей предыдущих матчей
+                for i in range(0, len(upper_matches[round_number - 1]), 2):
+                    match = Match.objects.create()
+                    upper_matches[round_number].append(match)
+                    # Назначаем следующие матчи для победителей
+                    if i < len(upper_matches[round_number - 1]) - 1:
+                        upper_matches[round_number - 1][i].next_match = match
+                        upper_matches[round_number - 1][i + 1].next_match = match
+                        upper_matches[round_number - 1][i].save()
+                        upper_matches[round_number - 1][i + 1].save()
+                    stage.matches.add(match)
+            tournament.stages.add(stage)
+
+        # Обработка нижней сетки
+        for round_number in range(num_rounds_lower):
+            stage = TournamentStage.objects.create(name=f"Нижняя сетка - Этап {round_number + 1}")
+            num_matches = max(1, len(lower_matches[round_number]) // 2)
+            for _ in range(num_matches):
+                match = Match.objects.create()
+                stage.matches.add(match)
+                lower_matches[round_number + 1].append(match)
+
+            # Связываем проигравших с матчами в нижней сетке
+            if round_number == 0:
+                for i, upper_match in enumerate(upper_matches[0]):
+                    if i % 2 == 0:
+                        loser_match = Match.objects.create()
+                        stage.matches.add(loser_match)
+                        upper_match.next_lose_match = loser_match
+                        upper_match.save()
+                        lower_matches[0].append(loser_match)
+            tournament.stages.add(stage)
+
+        # Финал между победителями верхней и нижней сетки
+        final_stage = TournamentStage.objects.create(name="Финал")
+        final_match = Match.objects.create()
+        upper_matches[-1][0].next_match = final_match
+        lower_matches[-1][0].next_match = final_match
+        upper_matches[-1][0].save()
+        lower_matches[-1][0].save()
+        final_stage.matches.add(final_match)
+        tournament.stages.add(final_stage)
 
     def create_round_robin_bracket(self, tournament, stages_data):
         pass
@@ -210,6 +341,10 @@ class TournamentSerializer(serializers.ModelSerializer):
     def get_participants(self, obj):
         participants_data = [ParticipantSerializer(participant).data for participant in obj.participants.all()]
         return participants_data
+    
+    def get_moderators(self, obj):
+        moderators_data = [UserSerializer(user).data for user in obj.moderators.all()]
+        return moderators_data
 
     def get_requests(self, obj):
         requests_data = [AmateurMatchUserSerializer(request).data for request in obj.requests.all()]

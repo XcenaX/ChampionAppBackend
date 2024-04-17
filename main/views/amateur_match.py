@@ -146,7 +146,7 @@ class JoinMatch(APIView):
             if not match.is_full():
                 if match.auto_accept_participants:
                     if match.participants.contains(request.user):
-                        return Response({'success': True, 'message': 'Вы уже присоеденились к матчу!'}, status=status.HTTP_400_BAD_REQUEST)
+                        return Response({'success': False, 'message': 'Вы уже присоеденились к матчу!'}, status=status.HTTP_400_BAD_REQUEST)
                     
                     match.participants.add(request.user)
                     # Может быть такая ситуация: 
@@ -159,7 +159,7 @@ class JoinMatch(APIView):
                     return Response({'success': True, 'message': 'Вы успешно присоединились к матчу!'}, status=200)
                 else:
                     if match.requests.contains(request.user):
-                        return Response({'success': True, 'message': 'Вы уже подали заявку на этот матч!'}, status=status.HTTP_400_BAD_REQUEST)
+                        return Response({'success': False, 'message': 'Вы уже подали заявку на этот матч!'}, status=status.HTTP_400_BAD_REQUEST)
                     
                     match.requests.add(request.user)
                     return Response({'success': True, 'message': 'Вы успешно подали заявку на матч!'}, status=200)
@@ -169,6 +169,55 @@ class JoinMatch(APIView):
             match.save()
             # TODO
             # сделать уведомление создателя матча, что на него откликнулись
+        except:
+            return Response({'success': False, 'message': 'Матча с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
+
+
+class LeaveMatch(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Покинуть любительский матч',        
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['match'],
+            properties={
+                'match': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
+            },
+        ),
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Вы успешно покинули матч!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            match_id = data["match"]
+
+            match = AmateurMatch.objects.get(id=match_id)
+            
+            if match.participants.contains(request.user):
+                match.participants.remove(request.user)
+                return Response({'success': True, 'message': 'Вы покинули матч!'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'success': False, 'message': 'Пользователь не состоит в этом матче но пытается выйти из него!'}, status=status.HTTP_400_BAD_REQUEST)         
         except:
             return Response({'success': False, 'message': 'Матча с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
 

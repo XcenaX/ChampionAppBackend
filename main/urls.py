@@ -1,10 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchParticipant, AmateurMatchViewSet, DeclineMatch, DeleteMatchParticipant, JoinMatch, MyMatches, RefuseMatchRequest
+from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchParticipant, AmateurMatchViewSet, DeclineMatch, DeleteMatchParticipant, JoinMatch, LeaveMatch, MyMatches, RefuseMatchRequest
 
 from main.views.city import CityRequest
 from main.views.sport import SportViewSet
-from main.views.tournament import TournamentViewSet
+from main.views.tournament import TournamentViewSet, UpdateTournament
 from main.views.user import UserDetail
 
 from main.views.auth import Login, RestorePassword, UserExists
@@ -31,6 +31,7 @@ urlpatterns = [
     path('cities/', CityRequest.as_view(), name='cities'),
 
     path('amateur-matches/join/', JoinMatch.as_view(), name='join_amateur_match'),
+    path('amateur-matches/leave/', LeaveMatch.as_view(), name='leave_amateur_match'),
     path('amateur-matches/accept/', AcceptMatch.as_view(), name='accept_amateur_match'),
     path('amateur-matches/decline/', DeclineMatch.as_view(), name='decline_amateur_match'),
     path('amateur-matches/my/', MyMatches.as_view(), name='my_matches'),
@@ -39,5 +40,7 @@ urlpatterns = [
     path('match-request/refuse/', RefuseMatchRequest.as_view(), name='refuse_match_request'),
     path('match-request/delete/', DeleteMatchParticipant.as_view(), name='delete_match_participant'),
     path('match-request/add/', AddMatchParticipant.as_view(), name='add_match_participant'),
+
+    path('tournaments/<int:id>/update-matches/', UpdateTournament.as_view(), name='update_tournament'),
     path('', include(router.urls)),
 ]
