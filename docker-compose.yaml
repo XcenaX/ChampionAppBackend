@@ -1,0 +1,125 @@
+version: '1'
+
+services:
+  db:
+    image: postgres:13
+    container_name: db
+    environment:
+      POSTGRES_USER: default
+      POSTGRES_PASSWORD: nSLxuB8b7csWsq
+      POSTGRES_DB: champion_bd
+    volumes:
+      - "./storage/postgres:/var/lib/postgresql/data"
+    restart: always
+    networks:
+      - deploy_network
+  main:
+    container_name: main
+    image: main
+    build:
+      context: "./django_root"
+      dockerfile: "Dockerfile"
+    volumes:
+      - "./django_root:/app"
+    restart: always
+    ports:
+      - 8008:80
+    expose:
+      - 80
+    command: ./docker-startup.sh
+    environment:
+      DB_DRIVER: postgresql
+      DB_USER: default
+      DB_PASSWORD: nSLxuB8b7csWsq
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: champion_bd
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: secret
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRES: 180
+      DEBUG: 1
+    depends_on:
+      - db
+      - elastic
+    networks:
+      - deploy_network
+  redis:
+    image: redis
+    container_name: redis
+    restart: always
+    volumes:
+      - "./storage/redis:/var/lib/redis"
+    networks:
+      - deploy_network
+  celery-worker:
+    build: ./django_root
+    container_name: celery_worker
+    command: celery -A champion_backend worker -l info --purge
+    environment:
+      DB_DRIVER: postgresql
+      DB_USER: default
+      DB_PASSWORD: nSLxuB8b7csWsq
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: champion_bd
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+    networks:
+      - deploy_network
+  celery-beat:
+    restart: always
+    container_name: celery_beat
+    build:
+      context: "./django_root"
+      dockerfile: "Dockerfile"
+    command: celery -A champion_backend beat -l info
+    environment:
+      DB_DRIVER: postgresql
+      DB_USER: default
+      DB_PASSWORD: nSLxuB8b7csWsq
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: champion_bd
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+      - db
+      - main
+    networks:
+      - deploy_network
+  elastic:
+    image: elasticsearch:7.16.2
+    container_name: elastic
+    environment:
+      - node.name=elastic
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512M -Xmx512M"
+      - http.cors.enabled=true
+      - http.cors.allow-origin=https://app.elasticvue.com
+    volumes:
+      - ./storage/elastic_test_1/data01:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    depends_on:
+      - db
+    restart: always
+    expose:
+      - 9200
+    ports:
+      - 9200:9200
+    networks:
+      - deploy_network
+
+networks:
+  deploy_network:
+    driver: bridge
+    # ipam:
+    #   config:
+    #     - subnet: SOME_IP/24

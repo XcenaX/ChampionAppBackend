@@ -1,0 +1,165 @@
+version: '1'
+
+services:
+  traefik:
+    image: docker.io/traefik:v2.9
+    ports:
+     - 80:80
+     - 443:443
+    # user: root
+    networks:
+      - "deploy_network"
+    volumes:
+     - "/var/run/docker.sock:/var/run/docker.sock:ro"
+     - "./traefik/traefik.toml:/etc/traefik/traefik.toml:ro"
+     - "/opt/glide-domain:/letsencrypt"
+     - "./traefik/config:/config:ro"
+     - "./traefik/resolv.conf:/etc/resolv.conf:ro"
+    environment:
+      - CF_API_EMAIL=artemhod2003@gmail.com
+      - CF_API_KEY=API_KEY
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+    container_name: traefik
+    restart: unless-stopped
+  nginx:
+    image: docker.io/nginx:1.23.1
+    container_name: nginx
+    restart: always
+    volumes:
+      - ./nginx/:/etc/nginx/:ro
+    networks:
+      - "deploy_network"
+    labels:
+     - "traefik.enable=true"
+     - "traefik.http.routers.nginx.rule=$HOSTS"
+     - "traefik.http.routers.nginx.entrypoints=web,websecure"
+     - "traefik.http.services.nginx.loadbalancer.passhostheader=true"
+     - "traefik.http.middlewares.nginx-redirect-websecure.redirectscheme.scheme=https"
+     - "traefik.http.routers.nginx.middlewares=nginx-redirect-websecure"
+     - "traefik.http.routers.nginx-websecure.rule=$HOSTS"
+     - "traefik.http.routers.nginx-websecure.entrypoints=websecure"
+     - "traefik.http.routers.nginx-websecure.tls=true"
+     - "traefik.http.routers.nginx-websecure.tls.certresolver=cfdns"
+    depends_on:
+      - db
+      - main
+      - redis
+      - celery-worker
+      - celery-beat
+      - elastic
+  db:
+    image: postgres:13
+    container_name: db
+    environment:
+      POSTGRES_USER: default
+      POSTGRES_PASSWORD: nSLxuB8b7csWsq
+      POSTGRES_DB: champion_bd
+    volumes:
+      - "./storage/postgres:/var/lib/postgresql/data"
+    restart: always
+    networks:
+      - deploy_network
+  main:
+    container_name: main
+    image: main
+    build:
+      context: "./django_root"
+      dockerfile: "Dockerfile"
+    volumes:
+      - "./django_root:/app"
+    restart: always
+    expose:
+      - 80
+    command: ./docker-startup.prod.sh
+    environment:
+      DB_DRIVER: postgresql
+      DB_USER: default
+      DB_PASSWORD: nSLxuB8b7csWsq
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: champion_bd
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: secret
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRES: 180      
+    depends_on:
+      - db
+      - elastic
+    networks:
+      - "deploy_network"
+  redis:
+    image: redis
+    container_name: redis
+    restart: always
+    volumes:
+      - "./storage/redis:/var/lib/redis"
+    networks:
+      - "deploy_network"
+  celery-worker:
+    build: ./django_root
+    container_name: celery_worker
+    command: celery -A champion_backend worker -l info --purge
+    environment:
+      DB_DRIVER: postgresql
+      DB_USER: default
+      DB_PASSWORD: nSLxuB8b7csWsq
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: champion_bd
+    depends_on:
+      - redis
+    networks:
+      - "deploy_network"
+  celery-beat:
+    restart: always
+    container_name: celery_beat
+    build:
+      context: "./django_root"
+      dockerfile: "Dockerfile"
+    command: celery -A champion_backend beat -l info
+    environment:
+      DB_DRIVER: postgresql
+      DB_USER: default
+      DB_PASSWORD: nSLxuB8b7csWsq
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: champion_bd      
+    depends_on:
+      - redis
+      - db
+      - main
+    networks:
+      - "deploy_network"
+  elastic:
+    image: elasticsearch:7.16.2
+    container_name: elastic
+    environment:
+      - node.name=elastic
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512M -Xmx512M"
+      - http.cors.enabled=true
+      - http.cors.allow-origin=https://app.elasticvue.com
+    volumes:
+      - ./storage/elastic_test_1/data01:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    depends_on:
+      - db
+    restart: always
+    expose:
+      - 9200
+    ports:
+      - 9200:9200
+    networks:
+      - "deploy_network"
+networks:
+  deploy_network:
+    driver: bridge
+    # ipam:
+    #   config:
+    #     - subnet: SOME_IP/24

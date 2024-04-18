@@ -1,0 +1,30 @@
+#TRAEFIK V2
+
+[log]
+  level = "DEBUG"
+
+[entryPoints]
+  [entryPoints.web]
+    address = ":80"
+
+    [entryPoints.web.http]
+      [entryPoints.web.http.redirections]
+        [entryPoints.web.http.redirections.entryPoint]
+          to = "websecure"
+          scheme = "https"
+
+  [entryPoints.websecure]
+    address = ":443"
+
+[providers.docker]
+  exposedbydefault = "false"
+
+ [certificatesResolvers.cfdns.acme]
+   email = "artemhod2003@gmail.com"
+   caServer = "https://acme-v02.api.letsencrypt.org/directory"
+   storage = "/letsencrypt/acme.json"
+   [certificatesResolvers.cfdns.acme.dnsChallenge]
+     resolvers = ["1.1.1.1:53", "1.0.0.1:53"]
+     provider = "cloudflare"
+     disablePropagationCheck = true
+     delayBeforeCheck = 10

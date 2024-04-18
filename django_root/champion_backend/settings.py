@@ -12,15 +12,18 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+from os import environ
+
 from datetime import timedelta
+from celery.schedules import timedelta as celery_timedelta
 
 from corsheaders.defaults import default_headers
 
 
-import environ
+import environ as environ2
 
-env = environ.Env()
-environ.Env.read_env()
+env = environ2.Env()
+environ2.Env.read_env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -70,6 +73,7 @@ INSTALLED_APPS = [
     'django_filters',
     'django_extensions',
     'phonenumber_field',
+    'celery',
 
     'main.apps.MainConfig',
 ]
@@ -171,8 +175,12 @@ DJANGO_ENV = os.getenv('Debug')
 if DJANGO_ENV == 'True':
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'champion_bd',
+            'USER': 'default',
+            'PASSWORD': 'nSLxuB8b7csWsq',
+            'HOST': 'db',
+            'PORT': '5432',
         }
     }
 else: # Потом изменить на нормальную базу
@@ -237,3 +245,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+REDIS_HOST = environ.get('REDIS_HOST', 'redis')
+REDIS_PORT = environ.get('REDIS_PORT', 6379)
+
+
+CELERY_BROKER_URL = 'redis://redis:6379'
+CELERY_RESULT_BACKEND = 'redis://redis:6379'
+CELERY_RESULT_EXPIRES = celery_timedelta(seconds=20)
