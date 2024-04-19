@@ -1,23 +1,20 @@
 import math
-import random
 from rest_framework import serializers
 from main.all_models.team import Team
 from main.all_models.tournament import Tournament, TournamentPlace, TournamentStage, Participant, Match
 
 from rest_framework import serializers
-from main.all_models.sport import Sport
 from main.models import User
 from main.serializers.sport import SportField
 
-import base64
-from django.core.files.base import ContentFile
-import uuid
 from django.core.exceptions import ObjectDoesNotExist
 
-from main.serializers.user import AmateurMatchUserSerializer, ParticipantSerializer, UserSerializer
+from main.serializers.user import AmateurMatchUserSerializer, UserSerializer
 from django.core.exceptions import ObjectDoesNotExist
 
 from django.db import transaction
+
+from main.services.img_functions import _decode_photo
 
 class TournamentPlaceField(serializers.RelatedField):
     queryset = TournamentPlace.objects.all()
@@ -32,6 +29,28 @@ class TournamentPlaceField(serializers.RelatedField):
             raise serializers.ValidationError('Такой вид спорта не найден.')
         except TypeError:
             raise serializers.ValidationError('Неправильный формат данных для вида спорта.')
+
+
+class TeamSerializer(serializers.ModelSerializer):
+    sport = SportField(many=False, read_only=False, required=True)
+    members = serializers.SerializerMethodField()
+
+    def get_members(self, obj):
+        moderators_data = [UserSerializer(user).data for user in obj.members.all()]
+        return moderators_data
+    
+    class Meta:
+        model = Team
+        fields = ['id', 'sport', 'name', 'logo', 'members']
+
+
+class ParticipantSerializer(serializers.ModelSerializer):
+    user = AmateurMatchUserSerializer(many=False, required=False)
+    team = TeamSerializer(many=False, required=False)
+    
+    class Meta:
+        model = Participant
+        fields = ('user', 'team')
 
 
 class NextMatchSerializer(serializers.ModelSerializer):
@@ -59,7 +78,7 @@ class MatchSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Match
-        fields = ['scheduled_start', 'actual_start', 'actual_end', 'status', 'participant1', 'participant2', 'winner', 'participants', 'next_match', 'next_lose_match']
+        fields = ['scheduled_start', 'actual_start', 'actual_end', 'status', 'participant1', 'participant2', 'participant1_score', 'participant2_score', 'winner', 'participants', 'next_match', 'next_lose_match']
     
     @transaction.atomic
     def create(self, validated_data):
@@ -105,12 +124,7 @@ class TournamentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tournament
-        fields = ['name', 'start', 'end', 'owner', 'enter_price', 'sport', 'photo', 'photo_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'requests', 'prize_pool', 'place', 'rules', 'matches', 'bracket', 'teams', 'players', 'stages']
-
-    def _decode_photo(self, photo_base64):
-        format, imgstr = photo_base64.split(';base64,')
-        ext = format.split('/')[-1]
-        return ContentFile(base64.b64decode(imgstr), name=f"{uuid.uuid4()}.{ext}")
+        fields = ['name', 'start', 'end', 'owner', 'enter_price', 'sport', 'photo', 'photo_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'is_team_tournament', 'requests', 'prize_pool', 'place', 'rules', 'matches', 'bracket', 'teams', 'players', 'stages']
 
     @transaction.atomic
     def create(self, validated_data):
@@ -119,7 +133,7 @@ class TournamentSerializer(serializers.ModelSerializer):
         teams = validated_data.pop('teams', [])
         photo_base64 = validated_data.pop('photo_base64', None)
         if photo_base64:
-            validated_data['photo'] = self._decode_photo(photo_base64)
+            validated_data['photo'] = _decode_photo(photo_base64)
         else:
             sport = validated_data.get('sport')
             validated_data['photo'] = sport.image
@@ -347,7 +361,11 @@ class TournamentSerializer(serializers.ModelSerializer):
         return moderators_data
 
     def get_requests(self, obj):
-        requests_data = [AmateurMatchUserSerializer(request).data for request in obj.requests.all()]
+        requests_data = []
+        for request in obj.users_requests.all():
+            requests_data.append(AmateurMatchUserSerializer(request).data)
+        for request in obj.teams_requests.all():
+            requests_data.append(TeamSerializer(request).data)
         return requests_data
 
     def get_stages(self, obj):

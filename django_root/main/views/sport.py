@@ -2,12 +2,7 @@ from main.all_models.sport import Sport
 from main.serializers.sport import SportSerializer
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-
-from django_filters.rest_framework import DjangoFilterBackend
-
-from rest_framework.response import Response
-
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 
 # from drf_yasg.utils import swagger_auto_schema
 # from drf_yasg import openapi

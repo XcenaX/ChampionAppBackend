@@ -6,7 +6,6 @@ from main.serializers.amateur_match import AmateurMatchSerializer
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
-from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework.response import Response
@@ -166,7 +165,6 @@ class JoinMatch(APIView):
             else:
                 return Response({'success': False, 'message': 'Мест на матч уже нет!'}, status=status.HTTP_400_BAD_REQUEST) 
 
-            match.save()
             # TODO
             # сделать уведомление создателя матча, что на него откликнулись
         except:
@@ -273,7 +271,6 @@ class AcceptMatchRequest(APIView):
 
             match.requests.remove(user)
             match.participants.add(user)
-            match.save()
 
             return Response({'success': True, 'message': 'Пользователь принят на матч!'}, status=200)
         except:
@@ -327,14 +324,13 @@ class RefuseMatchRequest(APIView):
                 return Response({'success': False, 'message': 'Переданного пользователя нет в списке заявок!'}, status=status.HTTP_400_BAD_REQUEST) 
         
             match.requests.remove(user)
-            match.save()
 
             return Response({'success': True, 'message': 'Пользователь был отклонен!'}, status=200)
         except:
             return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
 
-class DeleteMatchParticipant(APIView):
+class DeleteMatchParticipants(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
@@ -344,7 +340,7 @@ class DeleteMatchParticipant(APIView):
             required=['match'],
             properties={
                 'match': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
-                'user': openapi.Schema(type=openapi.TYPE_INTEGER, description="id пользователя которого нужно удалить"),                
+                'users': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER), description="id пользователей"),                                                
             },
         ),
         responses={
@@ -372,33 +368,34 @@ class DeleteMatchParticipant(APIView):
         try:
             data = json.loads(request.body)
             match_id = data["match"]
-            user_id = data["user"]
+            users_id = data.get("users", [])
 
             match = AmateurMatch.objects.get(id=match_id)
-            user = User.objects.get(id=user_id)
             
-            if not match.participants.contains(user):
-                return Response({'success': False, 'message': 'Переданного пользователя нет в списке участников!'}, status=status.HTTP_400_BAD_REQUEST) 
-        
-            match.participants.remove(user)
-            match.save()
+            for user_id in users_id:
+                user = User.objects.get(id=user_id)
+                
+                if not match.participants.contains(user):
+                    return Response({'success': False, 'message': 'Переданного пользователя нет в списке участников!'}, status=status.HTTP_400_BAD_REQUEST) 
+            
+                match.participants.remove(user)
 
             return Response({'success': True, 'message': 'Пользователь был удален!'}, status=200)
         except:
             return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
 
 
-class AddMatchParticipant(APIView):
+class AddMatchParticipants(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description='Добавить человека на любительский матч',        
+        operation_description='Добавить людей на любительский матч',        
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             required=['match'],
             properties={
                 'match': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
-                'user': openapi.Schema(type=openapi.TYPE_INTEGER, description="id пользователя которого нужно добавить на матч"),                
+                'users': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER), description="id пользователей"),                                
             },
         ),
         responses={
@@ -426,20 +423,20 @@ class AddMatchParticipant(APIView):
         try:
             data = json.loads(request.body)
             match_id = data["match"]
-            user_id = data["user"]
+            users_id = data.get("users", [])
 
             match = AmateurMatch.objects.get(id=match_id)
-            user = User.objects.get(id=user_id)            
+            for user_id in users_id:
+                user = User.objects.get(id=user_id)            
 
-            if match.participants.contains(user):
-                return Response({'success': False, 'message': 'Переданный пользователь уже учавствует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
+                if match.participants.contains(user):
+                    return Response({'success': False, 'message': 'Переданный пользователь уже участвует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
 
-            if match.requests.contains(user):
-                match.requests.remove(user)
+                if match.requests.contains(user):
+                    match.requests.remove(user)
 
-            match.participants.add(user)
-            match.save()
-
+                match.participants.add(user)
+            
             return Response({'success': True, 'message': 'Пользователь добавлен на матч!'}, status=200)
         except:
             return Response({'success': False, 'message': 'Матча или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 

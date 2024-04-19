@@ -1,5 +1,4 @@
 from django.db import models
-from champion_backend.settings import EMAIL_HOST_USER
 from main.models import User
 
 

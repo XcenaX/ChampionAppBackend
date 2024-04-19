@@ -1,10 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchParticipant, AmateurMatchViewSet, DeclineMatch, DeleteMatchParticipant, JoinMatch, LeaveMatch, MyMatches, RefuseMatchRequest
+from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchParticipants, AmateurMatchViewSet, DeclineMatch, DeleteMatchParticipants, JoinMatch, LeaveMatch, MyMatches, RefuseMatchRequest
 
 from main.views.city import CityRequest
 from main.views.sport import SportViewSet
-from main.views.tournament import TournamentViewSet, UpdateTournament
+from main.views.tournament import AcceptTournament, AcceptTournamentRequest, AddTournamentParticipants, DeclineTournament, DeleteTournamentParticipants, JoinTournament, LeaveTournament, RefuseTournamentRequest, TournamentViewSet, UpdateTournament
 from main.views.user import UserDetail
 
 from main.views.auth import Login, RestorePassword, UserExists
@@ -38,9 +38,19 @@ urlpatterns = [
 
     path('match-request/accept/', AcceptMatchRequest.as_view(), name='accept_match_request'),
     path('match-request/refuse/', RefuseMatchRequest.as_view(), name='refuse_match_request'),
-    path('match-request/delete/', DeleteMatchParticipant.as_view(), name='delete_match_participant'),
-    path('match-request/add/', AddMatchParticipant.as_view(), name='add_match_participant'),
+    path('match-request/delete/', DeleteMatchParticipants.as_view(), name='delete_match_participants'),
+    path('match-request/add/', AddMatchParticipants.as_view(), name='add_match_participants'),
 
     path('tournaments/<int:id>/update-matches/', UpdateTournament.as_view(), name='update_tournament'),
+    path('tournaments/join/', JoinTournament.as_view(), name='join_tournament'),
+    path('tournaments/leave/', LeaveTournament.as_view(), name='leave_tournament'),
+    path('tournaments/accept/', AcceptTournament.as_view(), name='accept_tournament'),
+    path('tournaments/decline/', DeclineTournament.as_view(), name='decline_tournament'),
+
+    path('tournament-request/accept/', AcceptTournamentRequest.as_view(), name='accept_tournament_request'),
+    path('tournament-request/refuse/', RefuseTournamentRequest.as_view(), name='refuse_tournament_request'),
+    path('tournament-request/delete/', DeleteTournamentParticipants.as_view(), name='delete_tournament_participants'),
+    path('tournament-request/add/', AddTournamentParticipants.as_view(), name='add_tournament_participants'),
+    
     path('', include(router.urls)),
 ]

@@ -1,1 +1,1 @@
-from main.models.court import Court, CourtBook, CourtFacility, CourtReview
+from main.all_models.court import Court, CourtBook, CourtFacility, CourtReview

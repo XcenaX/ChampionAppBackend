@@ -1,10 +1,5 @@
-from datetime import datetime
-import math
 from django.db import models
-from spacy import blank
-from traitlets import default
-from champion_backend.settings import EMAIL_HOST_USER
-from main.enums import MATCH_RESULT, MATCH_STATUS, TOURNAMENT_TYPE
+from main.enums import MATCH_STATUS, TOURNAMENT_TYPE
 from main.models import User
 from main.all_models.sport import Sport
 from main.all_models.team import Team
@@ -26,9 +21,7 @@ class TournamentPlace(models.Model):
 class Participant(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, blank=True, null=True)
-    score = models.IntegerField(default=0, verbose_name='Счет')
-    result = models.PositiveSmallIntegerField(choices=MATCH_RESULT, null=True, blank=True, verbose_name='Результат')
-
+    
     class Meta:
         verbose_name = 'Участник матча'
         verbose_name_plural = 'Участники матчей'
@@ -48,6 +41,8 @@ class Match(models.Model):
     # participants = models.ManyToManyField(Participant, related_name='tournament_participants', verbose_name='Участники турнира')
     participant1 = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name="match_participant1", blank=True, null=True, verbose_name="Участник 1")
     participant2 = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name="match_participant2", blank=True, null=True, verbose_name="Участник 2")
+    participant1_score = models.IntegerField(default=0, verbose_name='Счет участника 1')
+    participant2_score = models.IntegerField(default=0, verbose_name='Счет участника 2')
     next_match = models.ForeignKey('Match', on_delete=models.CASCADE, related_name='next_match_on_win', blank=True, null=True, verbose_name="Следующий матч")
     next_lose_match = models.ForeignKey('Match', on_delete=models.CASCADE, related_name='next_match_on_lose', blank=True, null=True, verbose_name="Следующий матч при поражении")
     
@@ -89,9 +84,9 @@ class Tournament(models.Model):
     prize_pool = models.IntegerField(verbose_name='Призовой фонд')
     rules = models.TextField(verbose_name='Правила', default="")
     participants = models.ManyToManyField(Participant, related_name='participants_tournament', verbose_name='Участники')
-    requests = models.ManyToManyField(User, related_name='requests_tournament', verbose_name='Запросы на участие')
+    users_requests = models.ManyToManyField(User, related_name='users_requests_tournament', verbose_name='Инливидуальные запросы на участие')
+    teams_requests = models.ManyToManyField(Team, related_name='_teams_requests_tournament', verbose_name='Командные запросы на участие')
     moderators = models.ManyToManyField(User, related_name='moderators_tournament', verbose_name='Модераторы турнира')
-    teams = models.ManyToManyField(Team, related_name='tournaments', verbose_name='Команды')
     max_participants = models.IntegerField(default=4, verbose_name='Максимальное количество участников')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
     photo = models.ImageField(upload_to='tournaments_photos/', blank=True, null=True)
@@ -99,6 +94,10 @@ class Tournament(models.Model):
     bracket = models.PositiveSmallIntegerField(choices=TOURNAMENT_TYPE, null=True, blank=True, verbose_name='Тип сетки турнира')
     verified = models.BooleanField(default=False, verbose_name='Подтверждено модератором')
     auto_accept_participants = models.BooleanField(default=False, verbose_name='Автоматически принимать всех')
+    is_team_tournament = models.BooleanField(default=False, verbose_name='Командный турнир')
+
+    def is_full(self):
+        return self.max_participants == self.participants.count()+1
 
     class Meta:
         verbose_name = 'Турнир'

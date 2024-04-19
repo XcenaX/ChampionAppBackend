@@ -1,11 +1,7 @@
 from rest_framework import serializers
 from main.all_models.match import AmateurMatch, MatchPhoto
-from django.core.exceptions import ObjectDoesNotExist
-from main.all_models.sport import Sport
-from main.enums import AMATEUR_MATCH_STATUS
 from main.serializers.user import AmateurMatchUserSerializer
-from main.serializers.sport import SportField, SportSerializer
-
+from main.serializers.sport import SportField
 import base64
 from django.core.files.base import ContentFile
 import uuid

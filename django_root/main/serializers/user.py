@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from main.all_models.tournament import Participant
 from main.models import User
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -23,15 +22,6 @@ class AmateurMatchUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id','degree', 'rating', 'phone', 'surname', 'first_name')
-
-
-class ParticipantSerializer(serializers.ModelSerializer):
-    user = AmateurMatchUserSerializer(many=False, required=False)
-    team = AmateurMatchUserSerializer(many=False, required=False)
-    
-    class Meta:
-        model = Participant
-        fields = ('user', 'team', 'score', 'result')
 
 
 class UserField(serializers.RelatedField):

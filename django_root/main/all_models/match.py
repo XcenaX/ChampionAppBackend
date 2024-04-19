@@ -1,7 +1,4 @@
 from django.db import models
-from spacy import blank
-from traitlets import default
-from main.all_models.tournament import TournamentStage
 from main.models import User
 from main.all_models.sport import Sport
 from main.enums import *
