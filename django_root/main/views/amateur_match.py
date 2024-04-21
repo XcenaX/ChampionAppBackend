@@ -271,6 +271,7 @@ class AcceptMatchRequest(APIView):
 
             match.requests.remove(user)
             match.participants.add(user)
+            match.save()
 
             return Response({'success': True, 'message': 'Пользователь принят на матч!'}, status=200)
         except:

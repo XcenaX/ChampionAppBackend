@@ -118,8 +118,8 @@ class TournamentSerializer(serializers.ModelSerializer):
     start = serializers.DateTimeField(required=True)
     end = serializers.DateTimeField(required=True)
     matches = MatchSerializer(many=True, required=False)
-    teams = serializers.ListField(child=serializers.IntegerField(), write_only=True)
-    players = serializers.ListField(child=serializers.IntegerField(), write_only=True)
+    teams = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
+    players = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     stages = serializers.SerializerMethodField()
 
     class Meta:
@@ -157,7 +157,10 @@ class TournamentSerializer(serializers.ModelSerializer):
                 tournament.participants.add(participant)
             except:
                 pass 
-                                    
+        
+        if not teams and not players: # Если начальные участники не переданы сетку не создаем
+            return tournament
+                      
         if tournament.bracket == 0:  # Single Elimination
             self.create_single_elimination_bracket(tournament, matches_data)
 
@@ -175,7 +178,10 @@ class TournamentSerializer(serializers.ModelSerializer):
 
     def create_single_elimination_bracket(self, tournament, matches_data):
         num_participants = len(tournament.participants.all())
-        num_rounds = math.ceil(math.log2(num_participants))
+        if num_participants == 0:
+            num_rounds = 0
+        else:
+            num_rounds = math.ceil(math.log2(num_participants))
         current_matches = []
         unselected_participants = list(tournament.participants.all())
         
