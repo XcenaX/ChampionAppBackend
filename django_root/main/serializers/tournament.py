@@ -71,8 +71,8 @@ class MatchSerializer(serializers.ModelSerializer):
     winner = ParticipantSerializer(many=False, required=False)
     participants = serializers.ListField(child=serializers.IntegerField(), write_only=True)
     scheduled_start = serializers.DateTimeField()
-    actual_start = serializers.DateTimeField()
-    actual_end = serializers.DateTimeField()
+    actual_start = serializers.DateTimeField(required=False)
+    actual_end = serializers.DateTimeField(required=False)
     next_match = NextMatchSerializer(many=False, required=False, read_only=True)
     next_lose_match = NextMatchSerializer(many=False, required=False, read_only=True)
     

@@ -28,6 +28,8 @@ from django.shortcuts import get_object_or_404
 
 from main.services.img_functions import _decode_photo
 
+from django.db.models import Min, Max
+
 class TournamentViewSet(viewsets.ModelViewSet):
     filter_backends = (DjangoFilterBackend,)
     filterset_class = TournamentFilter
@@ -764,3 +766,90 @@ class DeclineTournament(APIView):
 
         except:
             return Response({'success': False, 'message': 'Турнира с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
+
+
+class GetTournamentsPrices(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Получить количество турниров для разлинчых диапозонов призовых фондов и вступительных взносов',                
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "prize_pool": [
+                            {
+                                "start_price": 5000,
+                                "end_price": 10000,
+                                "count": 12
+                            },
+                            {
+                                "start_price": 10000,
+                                "end_price": 15000,
+                                "count": 21
+                            },
+                        ],  
+                        'enter_price': [
+                            {
+                                "start_price": 5000,
+                                "end_price": 10000,
+                                "count": 12
+                            },
+                            {
+                                "start_price": 10000,
+                                "end_price": 15000,
+                                "count": 21
+                            },
+                        ],  
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def get(self, request):
+        tournaments = Tournament.objects.all()
+
+        min_prize = tournaments.aggregate(min_price=Min('prize_pool'))['min_price']
+        max_prize = tournaments.aggregate(max_price=Max('prize_pool'))['max_price']
+        min_enter = tournaments.aggregate(min_price=Min('enter_price'))['min_price']
+        max_enter = tournaments.aggregate(max_price=Max('enter_price'))['max_price']
+
+        num_intervals = 20
+        prize_interval_size = (max_prize - min_prize) / num_intervals
+        enter_interval_size = (max_enter - min_enter) / num_intervals
+
+        prize_pool = []
+        enter_price = []
+
+        for i in range(num_intervals):
+            start_prize = min_prize + i * prize_interval_size
+            end_prize = start_prize + prize_interval_size
+            count_prize = tournaments.filter(prize_pool__gte=start_prize, prize_pool__lte=end_prize).count()
+
+            prize_pool.append({
+                "start_price": start_prize,
+                "end_price": end_prize,
+                "count": count_prize
+            })
+
+            start_enter = min_enter + i * enter_interval_size
+            end_enter = start_enter + enter_interval_size
+            count_enter = tournaments.filter(enter_price__gte=start_enter, enter_price__lte=end_enter).count()
+
+            enter_price.append({
+                "start_price": start_enter,
+                "end_price": end_enter,
+                "count": count_enter
+            })
+
+        return Response({'prize_pool': prize_pool, 'enter_price': enter_price}, status=200)

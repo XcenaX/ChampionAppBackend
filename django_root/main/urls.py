@@ -4,13 +4,12 @@ from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchPa
 
 from main.views.city import CityRequest
 from main.views.sport import SportViewSet
-from main.views.tournament import AcceptTournament, AcceptTournamentRequest, AddTournamentParticipants, DeclineTournament, DeleteTournamentParticipants, JoinTournament, LeaveTournament, RefuseTournamentRequest, TournamentViewSet, UpdateTournament
+from main.views.tournament import AcceptTournament, AcceptTournamentRequest, AddTournamentParticipants, DeclineTournament, DeleteTournamentParticipants, GetTournamentsPrices, JoinTournament, LeaveTournament, RefuseTournamentRequest, TournamentViewSet, UpdateTournament
 from main.views.user import UserDetail
 
 from main.views.auth import Login, RestorePassword, UserExists
 from main.views.auth import Register
 from main.views.auth import SendConfirmationCode
-from main.views.auth import SendRestoreLink
 from main.views.auth import ConfirmCode
 
 router = DefaultRouter()
@@ -46,6 +45,7 @@ urlpatterns = [
     path('tournaments/leave/', LeaveTournament.as_view(), name='leave_tournament'),
     path('tournaments/accept/', AcceptTournament.as_view(), name='accept_tournament'),
     path('tournaments/decline/', DeclineTournament.as_view(), name='decline_tournament'),
+    path('tournaments/prices/', GetTournamentsPrices.as_view(), name='tournament_prices'),
 
     path('tournament-request/accept/', AcceptTournamentRequest.as_view(), name='accept_tournament_request'),
     path('tournament-request/refuse/', RefuseTournamentRequest.as_view(), name='refuse_tournament_request'),
