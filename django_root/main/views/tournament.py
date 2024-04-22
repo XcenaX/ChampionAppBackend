@@ -824,10 +824,10 @@ class GetTournamentsPrices(APIView):
         min_enter = tournaments.aggregate(min_price=Min('enter_price'))['min_price']
         max_enter = tournaments.aggregate(max_price=Max('enter_price'))['max_price']
 
-        min_prize = min_prize if not None else 0
-        max_prize = max_prize if not None else 0
-        min_enter = min_enter if not None else 0
-        max_enter = max_enter if not None else 0
+        min_prize = min_prize if min_prize else 0
+        max_prize = max_prize if max_prize else 0
+        min_enter = min_enter if min_enter else 0
+        max_enter = max_enter if max_enter else 0
 
         num_intervals = 20
         prize_interval_size = (max_prize - min_prize) / num_intervals
