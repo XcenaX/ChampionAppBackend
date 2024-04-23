@@ -23,6 +23,8 @@ from django.core.mail import send_mail
 from main.serializers.tournament import TournamentSerializer
 
 import json
+import random
+from django.db.models import Q
 
 from django.shortcuts import get_object_or_404
 
@@ -141,7 +143,7 @@ class UpdateTournament(APIView):
         try:
             tournament = get_object_or_404(Tournament, id=id, owner=request.user)
             data = json.loads(request.body)
-            matches_data = data.get("matches", [])
+            matches_data = data["matches"]
 
             for match_data in matches_data:
                 match = get_object_or_404(Match, pk=match_data.get("id"))
@@ -152,19 +154,45 @@ class UpdateTournament(APIView):
                 
                 if "participant_1_score" in match_data and "participant_2_score" in match_data:
                     participant_1_score = match_data.get("participant_1_score")
-                    participant_2_score = match_data.get("participant_2_score")
+                    participant_2_score = match_data.get("participant_2_score")                                        
+
+                    if match.status == 2: # Если матч уже был завершен но нужно поменять результаты
+                        if (match.participant1_score < match.participant2_score) != (participant_1_score < participant_2_score): # Если результат матча изменился
+                            if(participant_1_score < participant_2_score):
+                                match.participant1.score -= tournament.win_points
+                                match.participant2.score += tournament.win_points
+                            elif(participant_1_score > participant_2_score):
+                                match.participant1.score += tournament.win_points
+                                match.participant2.score -= tournament.win_points
+                            else:
+                                if match.participant1_score < match.participant2_score:
+                                    match.participant2 -= tournament.win_points + tournament.draw_points
+                                    match.participant1 += tournament.draw_points
+                                elif match.participant1_score > match.participant2_score:
+                                    match.participant1 -= tournament.win_points + tournament.draw_points
+                                    match.participant2 += tournament.draw_points                                                         
+                    else:
+                        winner = None
+                        loser = None
+
+                        if participant_1_score > participant_2_score:
+                            winner = match.participant1
+                            loser = match.participant2
+                        elif participant_1_score < participant_2_score:
+                            winner = match.participant2
+                            loser = match.participant1                                          
+                                        
+                        if not winner and loser:
+                            match.participant1.score += tournament.draw_points
+                            match.participant2.score += tournament.draw_points
+                        else:
+                            winner.score += tournament.win_points                        
+
                     match.participant1_score = participant_1_score
                     match.participant2_score = participant_2_score
-                    
-                    if participant_1_score > participant_2_score:
-                        winner = match.participant1
-                        loser = match.participant2
-                    else:
-                        winner = match.participant2
-                        loser = match.participant1
-
                     match.winner = winner
                     match.status = 2
+                    match.save()
 
                     if tournament.bracket == 0: # single
                         if match.next_match:
@@ -189,8 +217,22 @@ class UpdateTournament(APIView):
                             match.next_lose_match.save()
                     elif tournament.bracket == 2: # round
                         pass
-                    elif tournament.bracket == 3: # swiss
-                        pass
+                    elif tournament.bracket == 3 and tournament.stages.count() != tournament.rounds_count: # swiss
+                        last_stage = tournament.stages.last()
+                        print(last_stage)
+                        if last_stage:
+                            # Проверяем, завершены ли все матчи последнего этапа
+                            if all(match.status == 2 for match in last_stage.matches.all()):
+                                print("MAtched ended")
+                                if tournament.stages.count() < tournament.rounds_count:
+                                    print("Stages can be")
+                                    new_stage = TournamentStage.objects.create(
+                                        name=f"Этап {tournament.stages.count() + 1}",                                        
+                                    )
+                                    
+                                    self.create_new_swiss_round(new_stage, tournament)
+
+                                    tournament.stages.add(new_stage)
 
                 match.participant1.save()
                 match.participant2.save()                
@@ -201,6 +243,37 @@ class UpdateTournament(APIView):
         except Exception as e:
             return Response({'success': False, 'message': f'Ошибка при обновлении: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         
+    def create_new_swiss_round(self, stage, tournament):
+        participants = list(tournament.participants.all())
+        # Сортировка участников по их текущему счету в убывающем порядке
+        participants.sort(key=lambda x: x.score, reverse=True)
+
+        # Организация пар на основе текущих результатов
+        # Используем жадный метод для создания пар, чтобы максимально сбалансировать уровень соперников
+        used = set()
+        pairs = []
+
+        for participant in participants:
+            if participant not in used:
+                best_match = None
+                # Ищем наиболее подходящего соперника, не игравшего с данным участником
+                for potential_opponent in participants:
+                    if potential_opponent not in used and potential_opponent != participant and not tournament.have_played(participant, potential_opponent):
+                        best_match = potential_opponent
+                        break
+                if best_match:
+                    pairs.append((participant, best_match))
+                    used.add(participant)
+                    used.add(best_match)
+
+        # Создаем матчи на основе сформированных пар
+        for participant1, participant2 in pairs:
+            match = Match.objects.create(
+                participant1=participant1,
+                participant2=participant2,                
+            )
+            stage.matches.add(match)
+
 
 class JoinTournament(APIView):
     permission_classes = [IsAuthenticated]
