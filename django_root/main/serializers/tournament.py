@@ -124,7 +124,7 @@ class TournamentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tournament
-        fields = ['name', 'start', 'end', 'owner', 'enter_price', 'sport', 'photo', 'photo_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'is_team_tournament', 'requests', 'prize_pool', 'city', 'rules', 'matches', 'bracket', 'teams', 'players', 'stages']
+        fields = ['id', 'name', 'start', 'end', 'owner', 'enter_price', 'sport', 'photo', 'photo_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'is_team_tournament', 'requests', 'prize_pool', 'city', 'rules', 'matches', 'bracket', 'teams', 'players', 'stages']
 
     @transaction.atomic
     def create(self, validated_data):
