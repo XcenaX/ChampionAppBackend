@@ -75,7 +75,7 @@ class TournamentStage(models.Model):
 class Tournament(models.Model):
     name = models.CharField(max_length=255, verbose_name='Название')
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_tournaments', verbose_name='Владелец')
-    place = models.ForeignKey(TournamentPlace, on_delete=models.CASCADE, related_name='tournaments', verbose_name='Место проведения')
+    city = models.TextField(verbose_name='Город', default="")    
     description = models.TextField(verbose_name='Описание', default="")
     start = models.DateTimeField(verbose_name='Дата и время начала регистрации', blank=True, null=True)
     end = models.DateTimeField(verbose_name='Дата и время окончания регистрации', blank=True, null=True)
