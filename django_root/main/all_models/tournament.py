@@ -112,7 +112,6 @@ class Tournament(models.Model):
     rounds_count = models.IntegerField(blank=True, null=True, verbose_name='Кол-во туров')
 
     def have_played(self, participant1, participant2):
-        # Проверяем все этапы турнира на наличие матча между team1 и team2
         for stage in self.stages.all():
             if stage.matches.filter(
                 models.Q(participant1=participant1, participant2=participant2) | models.Q(participant1=participant2, participant2=participant1)

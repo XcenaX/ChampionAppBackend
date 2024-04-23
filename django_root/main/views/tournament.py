@@ -193,50 +193,48 @@ class UpdateTournament(APIView):
                     match.winner = winner
                     match.status = 2
                     match.save()
+                    match.participant1.save()
+                    match.participant2.save()
+                    
+            if tournament.bracket == 0: # single
+                if match.next_match:
+                    if not match.next_match.participant1:
+                        match.next_match.participant1 = winner
+                    elif not match.next_match.participant2:
+                        match.next_match.participant2 = winner
+                    match.next_match.save()
+            if tournament.bracket == 1: # double
+                if match.next_match:
+                    if not match.next_match.participant1:
+                        match.next_match.participant1 = winner
+                    elif not match.next_match.participant2:
+                        match.next_match.participant2 = winner
+                    match.next_match.save()
 
-                    if tournament.bracket == 0: # single
-                        if match.next_match:
-                            if not match.next_match.participant1:
-                                match.next_match.participant1 = winner
-                            elif not match.next_match.participant2:
-                                match.next_match.participant2 = winner
-                            match.next_match.save()
-                    if tournament.bracket == 1: # double
-                        if match.next_match:
-                            if not match.next_match.participant1:
-                                match.next_match.participant1 = winner
-                            elif not match.next_match.participant2:
-                                match.next_match.participant2 = winner
-                            match.next_match.save()
+                if match.next_lose_match:
+                    if not match.next_lose_match.participant1:
+                        match.next_lose_match.participant1 = loser
+                    elif not match.next_lose_match.participant2:
+                        match.next_lose_match.participant2 = loser
+                    match.next_lose_match.save()
+            elif tournament.bracket == 2: # round
+                pass
+            elif tournament.bracket == 3 and tournament.stages.count() != tournament.rounds_count: # swiss
+                last_stage = tournament.stages.last()
+                print(last_stage)
+                if last_stage:
+                    # Проверяем, завершены ли все матчи последнего этапа
+                    if all(match.status == 2 for match in last_stage.matches.all()):
+                        print("MAtched ended")
+                        if tournament.stages.count() < tournament.rounds_count:
+                            print("Stages can be")
+                            new_stage = TournamentStage.objects.create(
+                                name=f"Этап {tournament.stages.count() + 1}",                                        
+                            )
+                            
+                            self.create_new_swiss_round(new_stage, tournament)
 
-                        if match.next_lose_match:
-                            if not match.next_lose_match.participant1:
-                                match.next_lose_match.participant1 = loser
-                            elif not match.next_lose_match.participant2:
-                                match.next_lose_match.participant2 = loser
-                            match.next_lose_match.save()
-                    elif tournament.bracket == 2: # round
-                        pass
-                    elif tournament.bracket == 3 and tournament.stages.count() != tournament.rounds_count: # swiss
-                        last_stage = tournament.stages.last()
-                        print(last_stage)
-                        if last_stage:
-                            # Проверяем, завершены ли все матчи последнего этапа
-                            if all(match.status == 2 for match in last_stage.matches.all()):
-                                print("MAtched ended")
-                                if tournament.stages.count() < tournament.rounds_count:
-                                    print("Stages can be")
-                                    new_stage = TournamentStage.objects.create(
-                                        name=f"Этап {tournament.stages.count() + 1}",                                        
-                                    )
-                                    
-                                    self.create_new_swiss_round(new_stage, tournament)
-
-                                    tournament.stages.add(new_stage)
-
-                match.participant1.save()
-                match.participant2.save()                
-                match.save()
+                            tournament.stages.add(new_stage)                
 
             return Response({'success': True, 'message': 'Турнир обновлен!'}, status=status.HTTP_200_OK)
 
@@ -247,6 +245,7 @@ class UpdateTournament(APIView):
         participants = list(tournament.participants.all())
         # Сортировка участников по их текущему счету в убывающем порядке
         participants.sort(key=lambda x: x.score, reverse=True)
+        print(participants)
 
         # Организация пар на основе текущих результатов
         # Используем жадный метод для создания пар, чтобы максимально сбалансировать уровень соперников
