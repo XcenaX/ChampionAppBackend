@@ -5,10 +5,10 @@ from main.enums import *
 
 
 class AmateurMatch(models.Model):
-    name = models.CharField(max_length=255, verbose_name='Имя матча')
+    name = models.CharField(max_length=255, verbose_name='Имя матча', db_index=True)
     description = models.CharField(max_length=500, default="", verbose_name='Описание матча')
     start = models.DateTimeField(verbose_name='Дата и время начала матча')
-    address = models.CharField(max_length=255, verbose_name='Адрес')
+    address = models.CharField(max_length=255, verbose_name='Адрес', db_index=True)
     lat = models.FloatField(blank=True, null=True, verbose_name='Широта')
     lon = models.FloatField(blank=True, null=True, verbose_name='Долгота')
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_amateur_matches', verbose_name='Организатор')
@@ -17,10 +17,10 @@ class AmateurMatch(models.Model):
     requests = models.ManyToManyField(User, blank=True, null=True, related_name='requests_amateur_matches', verbose_name='Запросы на участие')
     max_participants = models.IntegerField(default=1, verbose_name='Макс кол-во участников')
     auto_accept_participants = models.BooleanField(default=False, verbose_name='Автоматически принимать всех')
-    enter_price = models.IntegerField(verbose_name='Цена входа')
-    sport = models.ForeignKey(Sport, on_delete=models.CASCADE, verbose_name='Вид спорта')
+    enter_price = models.IntegerField(verbose_name='Цена входа', db_index=True)
+    sport = models.ForeignKey(Sport, on_delete=models.CASCADE, verbose_name='Вид спорта', db_index=True)
     canceled = models.BooleanField(default=False)
-    city = models.TextField(default="", verbose_name='Город')
+    city = models.TextField(default="", verbose_name='Город', db_index=True)
     verified = models.BooleanField(default=False, verbose_name='Подтвержден модерацией')
 
     def is_full(self):

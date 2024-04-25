@@ -23,7 +23,6 @@ class SportField(serializers.RelatedField):
             raise serializers.ValidationError('Неправильный формат данных для вида спорта.')
 
 
-
 class SportSerializer(serializers.ModelSerializer):
     image = serializers.FileField(use_url=True)
     icon = serializers.FileField(use_url=True, allow_null=True, required=False)
@@ -31,3 +30,18 @@ class SportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sport
         fields = ['id', 'name', 'image', 'icon']
+
+
+class AmateurMatchSportSerializer(serializers.ModelSerializer):
+    icon = serializers.FileField(use_url=True)
+
+    class Meta:
+        model = Sport
+        fields = ['icon', 'name']
+
+class TournamentListSportSerializer(serializers.ModelSerializer):
+    icon = serializers.FileField(use_url=True)
+
+    class Meta:
+        model = Sport
+        fields = ['icon']

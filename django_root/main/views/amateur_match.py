@@ -2,7 +2,7 @@ import json
 from champion_backend.settings import EMAIL_HOST_USER
 from main.all_models.match import AmateurMatch
 from main.models import User
-from main.serializers.amateur_match import AmateurMatchSerializer
+from main.serializers.amateur_match import AmateurMatchListSerializer, AmateurMatchSerializer
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -18,6 +18,7 @@ from drf_yasg import openapi
 from main.filters import AmateurMatchFilter
 
 from rest_framework.views import APIView
+from django.db.models import Count
 
 from django.core.mail import send_mail
 
@@ -27,9 +28,27 @@ class AmateurMatchViewSet(viewsets.ModelViewSet):
     filterset_class = AmateurMatchFilter
     permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'patch']
-    queryset = AmateurMatch.objects.all()
-    serializer_class = AmateurMatchSerializer
+    queryset = AmateurMatch.objects.prefetch_related('participants', 'requests').select_related('owner', 'sport').annotate(participants_count=Count('participants'))
+    # serializer_class = AmateurMatchSerializer
 
+    def __init__(self, *args, **kwargs):
+        super(AmateurMatchViewSet, self).__init__(*args, **kwargs)
+        self.serializer_action_classes = {
+            'list': AmateurMatchListSerializer,
+            'create': AmateurMatchSerializer,
+            'retrieve': AmateurMatchSerializer,
+            'update': AmateurMatchSerializer,
+            'partial_update': AmateurMatchSerializer,
+            'destroy': AmateurMatchSerializer,
+        }
+    
+    def get_serializer_class(self, *args, **kwargs):
+        kwargs['partial'] = True
+        try:
+            return self.serializer_action_classes[self.action]
+        except (KeyError, AttributeError):
+            return super(AmateurMatchViewSet, self).get_serializer_class()
+        
     @swagger_auto_schema(
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,

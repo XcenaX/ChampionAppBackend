@@ -1,4 +1,4 @@
-from main.all_models.tournament import Match, Participant, Tournament, Team, TournamentPlace, TournamentStage
+from main.all_models.tournament import Match, Participant, Tournament, Team, TournamentStage
 
 from champion_backend.settings import EMAIL_HOST_USER
 from main.models import User
@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from django.core.mail import send_mail
 
-from main.serializers.tournament import TournamentSerializer
+from main.serializers.tournament import TournamentListSerializer, TournamentSerializer
 
 import json
 import random
@@ -31,14 +31,34 @@ from django.shortcuts import get_object_or_404
 from main.services.img_functions import _decode_photo
 
 from django.db.models import Min, Max
+from rest_framework import serializers
+from django.db.models import Count
 
 class TournamentViewSet(viewsets.ModelViewSet):
     filter_backends = (DjangoFilterBackend,)
     filterset_class = TournamentFilter
     permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'patch']
-    queryset = Tournament.objects.all()
-    serializer_class = TournamentSerializer
+    queryset = Tournament.objects.select_related('sport', 'owner').annotate(participants_count=Count('participants'))
+    # serializer_class = TournamentSerializer
+
+    def __init__(self, *args, **kwargs):
+        super(TournamentViewSet, self).__init__(*args, **kwargs)
+        self.serializer_action_classes = {
+            'list': TournamentListSerializer,
+            'create': TournamentSerializer,
+            'retrieve': TournamentSerializer,
+            'update': TournamentSerializer,
+            'partial_update': TournamentSerializer,
+            'destroy': TournamentSerializer,
+        }
+    
+    def get_serializer_class(self, *args, **kwargs):
+        kwargs['partial'] = True
+        try:
+            return self.serializer_action_classes[self.action]
+        except (KeyError, AttributeError):
+            return super(TournamentViewSet, self).get_serializer_class()
 
     @swagger_auto_schema(
         request_body=openapi.Schema(
@@ -218,16 +238,14 @@ class UpdateTournament(APIView):
                         match.next_lose_match.participant2 = loser
                     match.next_lose_match.save()
             elif tournament.bracket == 2: # round
-                pass
+                pass # Новые матчи создавать не нужно (пока что)
             elif tournament.bracket == 3 and tournament.stages.count() != tournament.rounds_count: # swiss
                 last_stage = tournament.stages.last()
                 print(last_stage)
                 if last_stage:
                     # Проверяем, завершены ли все матчи последнего этапа
-                    if all(match.status == 2 for match in last_stage.matches.all()):
-                        print("MAtched ended")
+                    if all(match.status == 2 for match in last_stage.matches.all()):                        
                         if tournament.stages.count() < tournament.rounds_count:
-                            print("Stages can be")
                             new_stage = TournamentStage.objects.create(
                                 name=f"Этап {tournament.stages.count() + 1}",                                        
                             )

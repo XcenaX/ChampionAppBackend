@@ -1,7 +1,8 @@
 from rest_framework import serializers
+from main.all_models.tournament import Participant
 from main.all_models.match import AmateurMatch, MatchPhoto
 from main.serializers.user import AmateurMatchUserSerializer
-from main.serializers.sport import SportField
+from main.serializers.sport import AmateurMatchSportSerializer, SportField
 import base64
 from django.core.files.base import ContentFile
 import uuid
@@ -13,11 +14,30 @@ class MatchPhotoSerializer(serializers.ModelSerializer):
         model = MatchPhoto
         fields = ['photo']
 
+
+class AmateurMatchListSerializer(serializers.ModelSerializer):
+    participants_count = serializers.IntegerField(read_only=True)
+    photo = serializers.SerializerMethodField()
+    sport = AmateurMatchSportSerializer(many=False, read_only=True)
+    max_participants = serializers.IntegerField(min_value=2)
+    
+    def get_participants_count(self, obj):
+        return obj.participants.count()
+        
+    def get_photo(self, obj):
+        photo = obj.photos.first()
+        return MatchPhotoSerializer(photo).data['photo']
+
+    class Meta:
+        model = AmateurMatch
+        fields = ['id', 'name', 'start', 'address', 'city', 'enter_price', 'sport', 'photo', 'max_participants', 'participants_count']                
+
+
 class AmateurMatchSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()
     participants = serializers.SerializerMethodField()
     requests = serializers.SerializerMethodField()
-    photos = MatchPhotoSerializer(many=True, read_only=True)
+    photos = serializers.SerializerMethodField()
     photos_base64 = serializers.ListField(
         child=serializers.CharField(), write_only=True, required=False
     )
@@ -60,6 +80,10 @@ class AmateurMatchSerializer(serializers.ModelSerializer):
         serializer = AmateurMatchUserSerializer(obj.owner)
         return serializer.data
 
+    def get_photos(self, obj):
+        photos_data = [MatchPhotoSerializer(photo).data['photo'] for photo in obj.photos.all()]
+        return photos_data
+    
     def get_participants(self, obj):
         participants_data = [AmateurMatchUserSerializer(participant).data for participant in obj.participants.all()]
         return participants_data

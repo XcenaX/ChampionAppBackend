@@ -21,7 +21,19 @@ class UserSerializer(serializers.ModelSerializer):
 class AmateurMatchUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id','degree', 'rating', 'phone', 'surname', 'first_name')
+        fields = ('id','degree', 'rating', 'phone', 'surname', 'first_name', 'avatar')
+
+
+class TournamentUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'avatar', 'surname', 'first_name')
+
+
+class TournamentListUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['avatar']
 
 
 class UserField(serializers.RelatedField):
