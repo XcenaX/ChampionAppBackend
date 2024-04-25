@@ -135,7 +135,7 @@ class TournamentListSerializer(serializers.ModelSerializer):
     
 
 class TournamentSerializer(serializers.ModelSerializer):
-    owner = TournamentUserSerializer(many=False)
+    owner = TournamentUserSerializer(many=False, required=False)
     city = serializers.CharField(required=True)
     participants = ParticipantTournamentListSerializer(many=True, read_only=True)
     moderators = serializers.SerializerMethodField()
