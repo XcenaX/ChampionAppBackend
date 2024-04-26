@@ -3,6 +3,7 @@ TOURNAMENT_TYPE = (
     (1, 'Double Elimination'),
     (2, 'Round Robin'),
     (3, 'Swiss'),
+    (4, 'Leaderboard'),
 )
 
 MATCH_STATUS = (

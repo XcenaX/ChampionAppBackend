@@ -1,7 +1,7 @@
 import math
 from rest_framework import serializers
 from main.all_models.team import Team
-from main.all_models.tournament import Tournament, TournamentStage, Participant, Match
+from main.all_models.tournament import StageResult, Tournament, TournamentStage, Participant, Match
 
 from main.models import User
 from main.serializers.sport import SportField, TournamentListSportSerializer
@@ -104,12 +104,35 @@ class MatchSerializer(serializers.ModelSerializer):
         return match
 
 
+class StageResultSerializer(serializers.ModelSerializer):
+    participant = serializers.SerializerMethodField()
+
+    def get_participant(self, obj):
+        if obj.participant.user:
+            return f"{obj.participant.user.surname} {obj.participant.user.first_name}"
+        elif obj.participant.team:
+            return f"{obj.participant.team.name}"
+        else:
+            return ""
+            
+    class Meta:
+        model = StageResult
+        fields = ['participant', 'score']
+
+
 class TournamentStageSerializer(serializers.ModelSerializer):
     matches = MatchSerializer(many=True, read_only=True)
+    results = serializers.SerializerMethodField()
+
+    def get_results(self, obj):
+        if obj.tournament.bracket != 4:
+            return []
+        stage_results = StageResult.objects.filter(stage=obj)
+        return [StageResultSerializer(result).data for result in stage_results]
 
     class Meta:
         model = TournamentStage
-        fields = ['name', 'start', 'end', 'matches']
+        fields = ['id', 'name', 'start', 'end', 'matches', 'results']
 
 
 class TournamentListSerializer(serializers.ModelSerializer):
@@ -152,6 +175,8 @@ class TournamentSerializer(serializers.ModelSerializer):
     max_team_size = serializers.IntegerField(required=False)
     min_team_size = serializers.IntegerField(required=False)
 
+    mathces_count = serializers.IntegerField(required=False)
+
     # Swiss
     win_points = serializers.FloatField(required=False)
     draw_points = serializers.FloatField(required=False)
@@ -163,7 +188,7 @@ class TournamentSerializer(serializers.ModelSerializer):
                   'photo', 'photo_base64', 'max_participants', 'participants',
                   'moderators', 'auto_accept_participants', 'is_team_tournament',
                   'max_team_size', 'min_team_size', 'win_points', 'draw_points',
-                  'rounds_count', 'requests', 'prize_pool', 'city', 'rules',
+                  'rounds_count', 'mathces_count', 'requests', 'prize_pool', 'city', 'rules',
                   'bracket', 'teams', 'players', 'stages']
 
     @transaction.atomic
@@ -206,8 +231,11 @@ class TournamentSerializer(serializers.ModelSerializer):
         elif tournament.bracket == 2:  # Round Robin
             self.create_round_robin_bracket(tournament, matches_data)
         
-        elif tournament.bracket == 3:  # Swiss
+        elif tournament.bracket == 3:  # Swiss or Leaderboard
             self.create_swiss_bracket(tournament, matches_data)
+
+        elif tournament.bracket == 4:
+            self.create_leaderboard_bracket(tournament)
 
         tournament.save()
         return tournament
@@ -388,13 +416,12 @@ class TournamentSerializer(serializers.ModelSerializer):
         
         round_number = 1
 
-        # Генерация всех возможных матчей
         for _ in range(matches_count):
             for i in range(len(participants)):
                 for j in range(i + 1, len(participants)):
                     stage_name = f"Этап {round_number}"
                     stage = TournamentStage.objects.create(name=stage_name, tournament=tournament)                    
-                    match = Match.objects.create(
+                    Match.objects.create(
                         participant1=participants[i],
                         participant2=participants[j],
                         stage=stage
@@ -405,18 +432,57 @@ class TournamentSerializer(serializers.ModelSerializer):
         participants = list(Participant.objects.filter(tournament=tournament))
         num_participants = len(participants)
 
-        # Создаем только первый этап в начале турнира
+        unselected_participants = list(Participant.objects.filter(tournament=tournament))
+        
+        is_players_are_users = False
+        if unselected_participants[0].user:
+            is_players_are_users = True
+
         stage_name = "Этап 1"
         stage = TournamentStage.objects.create(name=stage_name, tournament=tournament)
 
         random.shuffle(participants)
         for i in range(0, num_participants, 2):
             if i + 1 < num_participants:
-                match = Match.objects.create(
-                    participant1=participants[i],
-                    participant2=participants[i + 1],
+                match_info = matches_data[i] if i < len(matches_data) else None
+                scheduled_start = None
+                participants_ids = []
+                if match_info:
+                    scheduled_start = match_info.get('scheduled_start')
+                    participants_ids = match_info.get('participants', [])
+
+                participant1 = None
+                participant2 = None
+
+                if participants_ids:
+                    if is_players_are_users:
+                        participant1 = next((p for p in unselected_participants if p.user.id == participants_ids[0]), None)
+                        participant2 = next((p for p in unselected_participants if p.user.id == participants_ids[1]), None)
+                    else:
+                        participant1 = next((p for p in unselected_participants if p.team.id == participants_ids[0]), None)
+                        participant2 = next((p for p in unselected_participants if p.team.id == participants_ids[1]), None)
+
+                    if participant1 in unselected_participants:
+                        unselected_participants.remove(participant1)
+                    if participant2 in unselected_participants:
+                        unselected_participants.remove(participant2)
+                else:
+                    participant1 = unselected_participants.pop() if unselected_participants else None
+                    participant2 = unselected_participants.pop() if unselected_participants else None
+                
+                Match.objects.create(
+                    participant1=participant1,
+                    participant2=participant2,
+                    scheduled_start=scheduled_start,
                     stage=stage
                 )
+    
+    def create_leaderboard_bracket(self, tournament):
+        # Каждый этап будет как событие(тур) турнира
+        rounds_count = max(tournament.rounds_count, 1)
+        for i in range(1, rounds_count+1):
+            stage_name = f"Этап {i}"
+            TournamentStage.objects.create(name=stage_name, tournament=tournament)            
 
     def update(self, instance, validated_data):
         photo_base64 = validated_data.pop('photo_base64', None)

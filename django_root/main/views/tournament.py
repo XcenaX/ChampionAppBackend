@@ -1,4 +1,4 @@
-from main.all_models.tournament import Match, Participant, Tournament, Team, TournamentStage
+from main.all_models.tournament import Match, Participant, StageResult, Tournament, Team, TournamentStage
 
 from champion_backend.settings import EMAIL_HOST_USER
 from main.models import User
@@ -134,8 +134,21 @@ class UpdateTournament(APIView):
                             'participant_2_score': openapi.Schema(type=openapi.TYPE_INTEGER, description='Счет второго участника'),
                         },
                         required=['id']
-                    )
-                )
+                    ),
+                ),
+                "results": openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    description='Обновить счет участников на определенном событии(туре) турнира (Leaderboard)',
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'participant_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID участника'),
+                            'score': openapi.Schema(type=openapi.TYPE_INTEGER, description='Счет участника'),
+                        },
+                        required=['id']
+                    ),
+                ),
+                "stage": openapi.Schema(type=openapi.TYPE_INTEGER, description='id Этапа')
             }
         ),
         responses={
@@ -163,7 +176,25 @@ class UpdateTournament(APIView):
         try:
             tournament = get_object_or_404(Tournament, id=id, owner=request.user)
             data = json.loads(request.body)
-            matches_data = data["matches"]
+            matches_data = data.get("matches", [])
+            results_data = data.get("results", [])
+            stage_id = data.get("stage", None)
+
+            if results_data and stage_id:
+                stage = TournamentStage.objects.get(id=stage_id)                
+                for result_data in results_data:
+                    participant_id = result_data.get("participant_id", None)
+                    if not participant_id:
+                        return Response({'success': False, 'message': 'Ошибка при обновлении: Участник с переданым participant_id не найден!'}, status=status.HTTP_400_BAD_REQUEST)
+
+                    participant = Participant.objects.get((Q(user__id=participant_id) | Q(team__id=participant_id)) & Q(tournament=stage.tournament))
+                    score = result_data.get("score", 0)
+                    try:
+                        result = StageResult.objects.get(stage=stage, participant=participant)
+                        result.score = score
+                        result.save()
+                    except:
+                        result = StageResult.objects.create(stage=stage, participant=participant, score=score)
 
             for match_data in matches_data:
                 match = get_object_or_404(Match, pk=match_data.get("id"))
@@ -239,7 +270,7 @@ class UpdateTournament(APIView):
                     match.next_lose_match.save()
             elif tournament.bracket == 2: # round
                 pass # Новые матчи создавать не нужно (пока что)
-            elif tournament.bracket == 3 and tournament.stages.count() != tournament.rounds_count: # swiss
+            elif tournament.bracket == 3 or tournament.bracket == 4 and tournament.stages.count() != tournament.rounds_count: # swiss
                 last_stage = tournament.stages.last()
                 print(last_stage)
                 if last_stage:

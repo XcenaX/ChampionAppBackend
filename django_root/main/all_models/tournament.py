@@ -100,6 +100,19 @@ class Participant(models.Model):
             return f"{self.tournament}. Команда {self.team}"
 
 
+class StageResult(models.Model):
+    stage = models.ForeignKey(TournamentStage, on_delete=models.CASCADE, related_name='results', verbose_name='Этап')
+    participant = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name='stage_results', verbose_name='Участник')
+    score = models.FloatField(default=0, verbose_name='Очки')
+
+    class Meta:
+        verbose_name = 'Результат этапа'
+        verbose_name_plural = 'Результаты этапов'
+
+    def __str__(self):
+        return f"{self.participant} - {self.score} очков на этапе {self.stage.name}"
+
+
 class Match(models.Model):
     scheduled_start = models.DateTimeField(verbose_name='Запланированное время начала', blank=True, null=True)
     actual_start = models.DateTimeField(null=True, blank=True, verbose_name='Фактическое время начала')

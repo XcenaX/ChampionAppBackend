@@ -37,3 +37,10 @@ class AmateurMatch(models.Model):
 class MatchPhoto(models.Model):
     match = models.ForeignKey(AmateurMatch, related_name='photos', on_delete=models.CASCADE)
     photo = models.FileField(upload_to='amateur_matches_photos/')
+    
+    class Meta:
+        verbose_name = 'Фото матча'
+        verbose_name_plural = 'Фото матча'
+
+    def __str__(self):
+        return f"Фото Матча: {self.match}"
