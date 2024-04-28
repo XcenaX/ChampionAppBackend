@@ -355,7 +355,7 @@ class JoinTournament(APIView):
                 examples={
                     "application/json": {
                         "success": True,  
-                        'message': 'Вы успешно присоединились к матчу!'                      
+                        'message': 'Вы успешно присоединились к турниру!'                      
                     },                    
                 }
             ),
@@ -405,9 +405,9 @@ class JoinTournament(APIView):
                     if not is_team:
                         if tournament.participants.filter(user=request.user).exists():
                             return Response({'success': False, 'message': 'Вы уже присоеденились к турниру!'}, status=status.HTTP_400_BAD_REQUEST)
-                        new_participant = Participant.objects.create(user=request.user)                        
+                        new_participant = Participant.objects.create(user=request.user, tournament=tournament)                        
                     else:                        
-                        new_participant = Participant.objects.create(team=new_team)
+                        new_participant = Participant.objects.create(team=new_team, tournament=tournament)
 
                     tournament.participants.add(new_participant)
                     
@@ -473,24 +473,18 @@ class LeaveTournament(APIView):
             team_id = data.get("team", None)            
             tournament = Tournament.objects.get(id=tournament_id)
             if team_id:
-                if tournament.participants.filter(team__id=team_id).exists():
-                    team = Team.objects.get(id=team_id)     
-                    participants = Participant.objects.filter(team=team, participants_tournament=tournament)   
-                    for participant in participants:
-                        tournament.participants.remove(participant)        
-                    return Response({'success': True, 'message': 'Вы покинули турнир!'}, status=status.HTTP_200_OK)
-                else:
-                    return Response({'success': False, 'message': 'Участник не состоит в этом матче но пытается выйти из него!'}, status=status.HTTP_400_BAD_REQUEST)         
+                team = Team.objects.get(id=team_id)     
+                participants = Participant.objects.filter(team=team, tournament=tournament)   
+                for participant in participants:
+                    participant.delete()       
+                return Response({'success': True, 'message': 'Вы покинули турнир!'}, status=status.HTTP_200_OK)
             else:
-                if tournament.participants.filter(user=request.user).exists():
-                    participants = Participant.objects.filter(user=request.user, participants_tournament=tournament)   
-                    for participant in participants:
-                        tournament.participants.remove(participant)        
-                    return Response({'success': True, 'message': 'Вы покинули турнир!'}, status=status.HTTP_200_OK)
-                else:
-                    return Response({'success': False, 'message': 'Участник не состоит в этом матче но пытается выйти из него!'}, status=status.HTTP_400_BAD_REQUEST)
-        except:
-            return Response({'success': False, 'message': 'Турнира с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
+                participants = Participant.objects.filter(user=request.user, tournament=tournament)   
+                for participant in participants:
+                    participant.delete()                                    
+                return Response({'success': True, 'message': 'Вы покинули турнир!'}, status=status.HTTP_200_OK)
+        except Exception as error:
+            return Response({'success': False, 'message': f'Турнира с таким id не найдено! {error}'}, status=status.HTTP_401_UNAUTHORIZED) 
 
 
 class AcceptTournamentRequest(APIView):
@@ -547,9 +541,9 @@ class AcceptTournamentRequest(APIView):
                         return Response({'success': False, 'message': 'Переданный пользователь уже участвует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
 
                     tournament.users_requests.remove(user)
-                    new_participant = Participant.objects.create(user=user)
+                    new_participant = Participant.objects.create(user=user, tournament=tournament)
                     tournament.participants.add(new_participant)
-                except:
+                except Exception as error:
                     return Response({'success': False, 'message': 'Пользователь с переданным user id не найден!'}, status=status.HTTP_400_BAD_REQUEST)             
             elif team_id:
                 try:
@@ -561,7 +555,7 @@ class AcceptTournamentRequest(APIView):
                         return Response({'success': False, 'message': 'Переданная команда уже участвует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
                     
                     tournament.teams_requests.remove(team)
-                    new_participant = Participant.objects.create(team=team)
+                    new_participant = Participant.objects.create(team=team, tournament=tournament)
                     tournament.participants.add(new_participant)
                 except:
                     return Response({'success': False, 'message': 'Команда с переданным team id не найдена!'}, status=status.HTTP_400_BAD_REQUEST) 
@@ -764,7 +758,7 @@ class AddTournamentParticipants(APIView):
                             return Response({'success': False, 'message': 'Переданный пользователь уже учавствует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
                         if tournament.users_requests.contains(user):
                             tournament.users_requests.remove(user)
-                        new_participant = Participant.objects.create(user=user)
+                        new_participant = Participant.objects.create(user=user, tournament=tournament)
                         tournament.participants.add(new_participant)
                     except:
                         return Response({'success': False, 'message': 'Пользователя с переданным user id не существует!'}, status=status.HTTP_400_BAD_REQUEST)                     
@@ -776,7 +770,7 @@ class AddTournamentParticipants(APIView):
                             return Response({'success': False, 'message': 'Переданная команда уже учавствует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
                         if tournament.teams_requests.contains(team):
                             tournament.teams_requests.remove(team)
-                        new_participant = Participant.objects.create(team=team)
+                        new_participant = Participant.objects.create(team=team, tournament=tournament)
                         tournament.participants.add(new_participant)
                     except:
                         return Response({'success': False, 'message': 'Команды с переданным team id не существует!'}, status=status.HTTP_400_BAD_REQUEST)             
@@ -841,7 +835,6 @@ class SetTournamentModerators(APIView):
             return Response({'success': True, 'message': 'Модераторы турнира изменены!'}, status=200)
         except:
             return Response({'success': False, 'message': 'Турнира или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
-
 
 
 class AcceptTournament(APIView):

@@ -6,6 +6,8 @@ from main.serializers.sport import AmateurMatchSportSerializer, SportField
 import base64
 from django.core.files.base import ContentFile
 import uuid
+from main.services.img_functions import _decode_photo
+
 
 class MatchPhotoSerializer(serializers.ModelSerializer):
     photo = serializers.FileField(use_url=True)
@@ -49,18 +51,13 @@ class AmateurMatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = AmateurMatch
         fields = ['id', 'name', 'description', 'start', 'address', 'city', 'lat', 'lon', 'owner', "canceled", 'enter_price', 'sport', 'auto_accept_participants', 'photos', 'photos_base64', 'max_participants', 'participants', 'requests' ]                
-    
-    def _decode_photo(self, photo_base64):
-        format, imgstr = photo_base64.split(';base64,')
-        ext = format.split('/')[-1]
-        return ContentFile(base64.b64decode(imgstr), name=f"{uuid.uuid4()}.{ext}")
 
     def create(self, validated_data):
         photos_base64 = validated_data.pop('photos_base64', [])
         match = super().create(validated_data)
         photos = []
         for photo_base64 in photos_base64:
-            photo = self._decode_photo(photo_base64)
+            photo = _decode_photo(photo_base64)
             photos.append(MatchPhoto(match=match, photo=photo))
         MatchPhoto.objects.bulk_create(photos)  # Более эффективное создание записей
         return match

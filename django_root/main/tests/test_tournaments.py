@@ -1,7 +1,7 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
-from main.all_models.tournament import Tournament, TournamentPlace
+from main.all_models.tournament import Tournament
 from main.models import User
 from main.all_models.sport import Sport
 import json
@@ -20,7 +20,6 @@ class TournamentsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         user = User.objects.get(email=user_data["email"])
-        user_data['id'] = user.id
         if role != 0:
             user.role = role
             user.save()
@@ -45,7 +44,7 @@ class TournamentsTests(APITestCase):
                 self.register_user(participant)
 
         self.sport = Sport.objects.create(name='Футбол')
-        self.place = TournamentPlace.objects.create(name='Футбольное поле')
+        self.place = 'Футбольное поле'
         self.tournament = None        
 
     def test_create_tournament(self, bracket=0, auto_accept=True):
@@ -62,24 +61,24 @@ class TournamentsTests(APITestCase):
             'enter_price': 1500,
             'sport': self.sport.id,
             'max_participants': 8,
+            'city': "Астана",
             'bracket': bracket,
             'prize_pool': 100000,
-            'place': self.place.id,            
+            'place': self.place,            
             'auto_accept_participants': auto_accept,
             'photos_base64': [test_image_base64, test_image_base64]  # Отправляем два тестовых изображения
         }
         response = self.client.post(url, data, format='json')
-
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Tournament.objects.count(), 1)
         self.tournament = Tournament.objects.first()
 
     def test_join_tournament(self, auto_accept=True, as_team=False):
         self.test_create_tournament(auto_accept=auto_accept)
-
+        
         token = self.login_user(self.users[1].email)
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
-        
+
         url = reverse('join_tournament')
         data = {'tournament': self.tournament.id}
         response = self.client.post(url, data, format='json')
@@ -91,38 +90,37 @@ class TournamentsTests(APITestCase):
             self.assertTrue(self.tournament.users_requests.filter(id=self.users[1].id).exists())
 
     def test_leave_tournament(self):
-        self.test_join_tournament()  # Сначала присоединяем пользователя
+        self.test_join_tournament()
         url = reverse('leave_tournament')
         data = {'tournament': self.tournament.id}
         response = self.client.post(url, data, format='json')
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(self.tournament.participants.filter(user__id=self.users[1].id).exists())
 
     def test_accept_request(self):
         # есть запрос на вступление, который нужно одобрить  
-        self.test_join_tournament(auto_accept=False)
-        
+        self.test_join_tournament(auto_accept=False)        
+
         token = self.login_user(self.users[0].email)
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
 
         url = reverse('accept_tournament_request')
         data = {'tournament': self.tournament.id, 'user': self.users[1].id}
         response = self.client.post(url, data, format='json')          
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(self.tournament.participants.filter(user__id=self.users[1].id).exists())
         self.assertFalse(self.tournament.users_requests.filter(id=self.users[1].id).exists())
 
     def test_decline_request(self):
         # есть запрос на вступление, который нужно отклонить
-        self.test_join_tournament(auto_accept=False)
-
-        token = self.login_user(self.users[0].email)
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)    
+        self.test_join_tournament(auto_accept=False)   
         
+        token = self.login_user(self.users[0].email)
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
+
         url = reverse('refuse_tournament_request')
         data = {'tournament': self.tournament.id, 'user': self.users[1].id}
         response = self.client.post(url, data, format='json')
-        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(self.tournament.users_requests.filter(id=self.users[1].id).exists())

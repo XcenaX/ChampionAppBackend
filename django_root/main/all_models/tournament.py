@@ -149,7 +149,7 @@ class New(models.Model):
 
 
 class TournamentPhoto(models.Model):
-    match = models.ForeignKey(Tournament, related_name='photos', on_delete=models.CASCADE)
+    tournament = models.ForeignKey(Tournament, related_name='photos', on_delete=models.CASCADE)
     photo = models.FileField(upload_to='tournament_photos/')
     
     class Meta:

@@ -7,48 +7,46 @@ from main.all_models.sport import Sport
 import json
 
 class AmateurMatchTests(APITestCase):
-    def setUp(self):
-        self.user1_data = {
-            'email': 'test@mail.ru',
+    def register_user(self, email, role=0):
+        user_data = {
+            'email': email,
             'password': '123456',
             'confirm_password': '123456',
             'notify': True,
             'first_name': 'Test',
             'surname': 'User'
         }
-        response = self.client.post(reverse('register'), json.dumps(self.user1_data), content_type='application/json')
+        response = self.client.post(reverse('register'), json.dumps(user_data), content_type='application/json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        user = User.objects.get(email=self.user1_data["email"])
-        self.user1_data['id'] = user.id
-        user.role = 3 # admin
-        user.save()
-        
-        response = self.client.post(reverse('login'), json.dumps({'email': 'test@mail.ru', 'password': '123456'}), content_type='application/json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.user1_token = response.data['access']
-        
-        self.user2_data = {
-            'email': 'test2@mail.ru',
-            'password': '123456',
-            'confirm_password': '123456',
-            'notify': True,
-            'first_name': 'Test2',
-            'surname': 'User2'
-        }
-        response = self.client.post(reverse('register'), json.dumps(self.user2_data), content_type='application/json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user = User.objects.get(email=user_data["email"])
+        if role != 0:
+            user.role = role
+            user.save()
 
-        self.user2_data['id'] = User.objects.get(email=self.user2_data["email"]).id
-
-        response = self.client.post(reverse('login'), json.dumps({'email': 'test2@mail.ru', 'password': '123456'}), content_type='application/json')
+        self.users.append(user)
+    
+    def login_user(self, email):
+        response = self.client.post(reverse('login'), json.dumps({'email': email, 'password': '123456'}), content_type='application/json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.user2_token = response.data['access']
+        return response.data['access']
 
-        self.sport = Sport.objects.create(name='Football')        
+    def setUp(self):
+        self.users = []
+        participants = ["test@mail.ru", "test2@mail.ru"]
+        count = 0
+        for participant in participants:
+            if count == 0:
+                self.register_user(participant, role=3)
+                count = 1
+            else:
+                self.register_user(participant)
+
+        self.sport = Sport.objects.create(name='Футбол')        
 
     def test_create_match(self, auto_accept=True):
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.user1_token)
+        token = self.login_user(self.users[0].email)
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
         url = '/api/amateur-matches/'
         test_image_base64 = 'data:image/png;base64,iVBO'
         data = {
@@ -72,15 +70,18 @@ class AmateurMatchTests(APITestCase):
 
     def test_join_match(self, auto_accept=True):
         self.test_create_match(auto_accept)
+
+        token = self.login_user(self.users[1].email)
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
+
         url = reverse('join_amateur_match')
         data = {'match': self.match.id}
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.user2_token)
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         if auto_accept:
-            self.assertTrue(self.match.participants.filter(id=self.user2_data['id']).exists())
+            self.assertTrue(self.match.participants.filter(id=self.users[1].id).exists())
         else:
-            self.assertTrue(self.match.requests.filter(id=self.user2_data['id']).exists())
+            self.assertTrue(self.match.requests.filter(id=self.users[1].id).exists())
 
     def test_leave_match(self):
         self.test_join_match()  # Сначала присоединяем пользователя
@@ -88,25 +89,32 @@ class AmateurMatchTests(APITestCase):
         data = {'match': self.match.id}
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(self.match.participants.filter(id=self.user2_data['id']).exists())
+        self.assertFalse(self.match.participants.filter(id=self.users[1].id).exists())
 
     def test_accept_request(self):
         # есть запрос на вступление, который нужно одобрить  
-        self.test_join_match(auto_accept=False)
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.user1_token)      
+        self.test_join_match(auto_accept=False) 
+
+        token = self.login_user(self.users[0].email)
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
+
         url = reverse('accept_match_request')
-        data = {'match': self.match.id, 'user': self.user2_data['id']}
-        response = self.client.post(url, data, format='json')          
+        data = {'match': self.match.id, 'user': self.users[1].id}
+        response = self.client.post(url, data, format='json')
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(self.match.participants.filter(id=self.user2_data['id']).exists())
-        self.assertFalse(self.match.requests.filter(id=self.user2_data['id']).exists())
+        self.assertTrue(self.match.participants.filter(id=self.users[1].id).exists())
+        self.assertFalse(self.match.requests.filter(id=self.users[1].id).exists())
 
     def test_decline_request(self):
         # есть запрос на вступление, который нужно отклонить
-        self.test_join_match(auto_accept=False)
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.user1_token)      
+        self.test_join_match(auto_accept=False)    
+
+        token = self.login_user(self.users[0].email)
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
+
         url = reverse('refuse_match_request')
-        data = {'match': self.match.id, 'user': self.user2_data['id']}
+        data = {'match': self.match.id, 'user': self.users[1].id}
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(self.match.requests.filter(id=self.user2_data['id']).exists())
+        self.assertFalse(self.match.requests.filter(id=self.users[1].id).exists())

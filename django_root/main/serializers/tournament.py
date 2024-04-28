@@ -211,15 +211,21 @@ class TournamentSerializer(serializers.ModelSerializer):
         matches_data = validated_data.pop('matches', [])
         players = validated_data.pop('players', [])
         teams = validated_data.pop('teams', [])
-        photo_base64 = validated_data.pop('photo_base64', None)
-        if photo_base64:
-            validated_data['photo'] = _decode_photo(photo_base64)
-        else:
-            sport = validated_data.get('sport')
-            validated_data['photo'] = sport.image
+        photos_base64 = validated_data.pop('photos_base64', [])
         
         tournament = Tournament.objects.create(**validated_data)
+
+        photos = []
+        for photo_base64 in photos_base64:
+            photo = _decode_photo(photo_base64)
+            photos.append(TournamentPhoto(tournament=tournament, photo=photo))
         
+        if not photos:
+            sport = validated_data.get('sport')
+            validated_data['photos'] = sport.image
+        else:
+            TournamentPhoto.objects.bulk_create(photos)
+
         for user_id in players:
             try:
                 user = User.objects.get(id=user_id)
