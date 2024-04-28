@@ -1,7 +1,7 @@
 import math
 from rest_framework import serializers
 from main.all_models.team import Team
-from main.all_models.tournament import StageResult, Tournament, TournamentStage, Participant, Match
+from main.all_models.tournament import StageResult, Tournament, TournamentStage, Participant, Match, TournamentPhoto
 
 from main.models import User
 from main.serializers.sport import SportField, TournamentListSportSerializer
@@ -135,11 +135,20 @@ class TournamentStageSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'start', 'end', 'matches', 'results']
 
 
+
+class TournamentPhotoSerializer(serializers.ModelSerializer):
+    photo = serializers.FileField(use_url=True)
+
+    class Meta:
+        model = TournamentPhoto
+        fields = ['photo']
+
+
 class TournamentListSerializer(serializers.ModelSerializer):
     participants = serializers.SerializerMethodField()
     participants_count = serializers.IntegerField(read_only=True)
     sport = TournamentListSportSerializer(many=False)
-    photo = serializers.CharField(write_only=True, required=False)
+    photo = serializers.SerializerMethodField()
     max_participants = serializers.IntegerField(min_value=2)
     start = serializers.DateTimeField(required=True)
     end = serializers.DateTimeField(required=True)
@@ -148,6 +157,10 @@ class TournamentListSerializer(serializers.ModelSerializer):
         model = Tournament
         fields = ['id', 'name', 'start', 'end', 'enter_price', 'sport', 'photo',
                   'max_participants', 'participants', 'participants_count', 'prize_pool']
+
+    def get_photo(self, obj):
+        photo = obj.photos.first()
+        return TournamentPhotoSerializer(photo).data['photo']
 
     def get_participants_count(self, obj):
         return Participant.objects.filter(tournament=obj).count()
@@ -164,8 +177,10 @@ class TournamentSerializer(serializers.ModelSerializer):
     moderators = serializers.SerializerMethodField()
     requests = serializers.SerializerMethodField()
     sport = SportField(many=False, read_only=False, required=True)
-    photo = serializers.CharField(write_only=True, required=False)
-    photo_base64 = serializers.CharField(write_only=True, required=False)
+    photos = serializers.SerializerMethodField()
+    photos_base64 = serializers.ListField(
+        child=serializers.CharField(), write_only=True, required=False
+    )
     max_participants = serializers.IntegerField(min_value=2)
     start = serializers.DateTimeField(required=True)
     end = serializers.DateTimeField(required=True)
@@ -185,7 +200,7 @@ class TournamentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tournament
         fields = ['id', 'name', 'start', 'end', 'owner', 'enter_price', 'sport',
-                  'photo', 'photo_base64', 'max_participants', 'participants',
+                  'photos', 'photos_base64', 'max_participants', 'participants',
                   'moderators', 'auto_accept_participants', 'is_team_tournament',
                   'max_team_size', 'min_team_size', 'win_points', 'draw_points',
                   'rounds_count', 'mathces_count', 'requests', 'prize_pool', 'city', 'rules',
@@ -502,3 +517,7 @@ class TournamentSerializer(serializers.ModelSerializer):
         for request in obj.teams_requests.all():
             requests_data.append(TeamSerializer(request).data)
         return requests_data
+
+    def get_photos(self, obj):
+        photos_data = [TournamentPhotoSerializer(photo).data['photo'] for photo in obj.photos.all()]
+        return photos_data

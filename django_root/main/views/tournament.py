@@ -786,6 +786,64 @@ class AddTournamentParticipants(APIView):
             return Response({'success': False, 'message': 'Турнира или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
         
 
+class SetTournamentModerators(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Изменить модераторов турнира. Список модераторов заменяется на переданный',        
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['tournament'],
+            properties={
+                'tournament': openapi.Schema(type=openapi.TYPE_INTEGER, description="id турнирв"),                
+                'users': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER), description="id пользователей"),                
+            },
+        ),
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Пользователь был принят!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            
+            tournament_id = data["tournament"]
+            users_id = data.get("users", [])
+
+            tournament = Tournament.objects.get(id=tournament_id)
+
+            if users_id:
+                tournament.moderators.clear()
+                for user_id in users_id:
+                    try:
+                        user = User.objects.get(id=user_id)                    
+                        tournament.moderators.add(user)
+                    except:
+                        return Response({'success': False, 'message': 'Пользователя с переданным user id не существует!'}, status=status.HTTP_400_BAD_REQUEST)                     
+
+            return Response({'success': True, 'message': 'Модераторы турнира изменены!'}, status=200)
+        except:
+            return Response({'success': False, 'message': 'Турнира или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
+
+
+
 class AcceptTournament(APIView):
     permission_classes = [IsAuthenticated]
 

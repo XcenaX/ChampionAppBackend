@@ -1,9 +1,14 @@
-TOURNAMENT_TYPE = (
+TOURNAMENT_BRACKET_TYPE = (
     (0, 'Signle Elimination'),
     (1, 'Double Elimination'),
     (2, 'Round Robin'),
     (3, 'Swiss'),
     (4, 'Leaderboard'),
+)
+
+TOURNAMENT_TYPE = (
+    (0, 'Одноступенчатый'),
+    (1, 'Двуступенчатый'),
 )
 
 MATCH_STATUS = (

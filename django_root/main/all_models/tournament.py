@@ -1,5 +1,5 @@
 from django.db import models
-from main.enums import MATCH_STATUS, TOURNAMENT_TYPE
+from main.enums import MATCH_STATUS, TOURNAMENT_TYPE, TOURNAMENT_BRACKET_TYPE
 from main.models import User
 from main.all_models.sport import Sport
 from main.all_models.team import Team
@@ -26,8 +26,8 @@ class Tournament(models.Model):
     max_team_size = models.IntegerField(blank=True, null=True, verbose_name='Максимальное количество участников в команде')
     min_team_size = models.IntegerField(blank=True, null=True, verbose_name='Минимальное количество участников в команде')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
-    photo = models.ImageField(upload_to='tournaments_photos/', blank=True, null=True)
-    bracket = models.PositiveSmallIntegerField(choices=TOURNAMENT_TYPE, null=True, blank=True, verbose_name='Тип сетки турнира')
+    bracket = models.PositiveSmallIntegerField(choices=TOURNAMENT_BRACKET_TYPE, null=True, blank=True, verbose_name='Тип сетки турнира')
+    tournament_type = models.PositiveSmallIntegerField(choices=TOURNAMENT_TYPE, null=True, blank=True, verbose_name='Тип турнира')  
     verified = models.BooleanField(default=False, verbose_name='Подтверждено модератором')
     auto_accept_participants = models.BooleanField(default=False, verbose_name='Автоматически принимать всех')
     allow_not_full_teams = models.BooleanField(default=False, verbose_name='Разрешить участвовать командам с неполными составами')
@@ -146,3 +146,15 @@ class New(models.Model):
 
     def __str__(self):
         return f"Новость {self.id}"
+
+
+class TournamentPhoto(models.Model):
+    match = models.ForeignKey(Tournament, related_name='photos', on_delete=models.CASCADE)
+    photo = models.FileField(upload_to='tournament_photos/')
+    
+    class Meta:
+        verbose_name = 'Фото турнира'
+        verbose_name_plural = 'Фото турниров'
+
+    def __str__(self):
+        return f"Фото Турнира: {self.match}"
