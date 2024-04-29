@@ -171,8 +171,7 @@ class TournamentListSerializer(serializers.ModelSerializer):
     
 
 class TournamentSerializer(serializers.ModelSerializer):
-    owner = TournamentUserSerializer(many=False, required=False)
-    city = serializers.CharField(required=True)
+    owner = TournamentUserSerializer(many=False, read_only=True)
     participants = ParticipantTournamentListSerializer(many=True, read_only=True)
     moderators = serializers.SerializerMethodField()
     requests = serializers.SerializerMethodField()
@@ -181,32 +180,29 @@ class TournamentSerializer(serializers.ModelSerializer):
     photos_base64 = serializers.ListField(
         child=serializers.CharField(), write_only=True, required=False
     )
-    max_participants = serializers.IntegerField(min_value=2)
-    start = serializers.DateTimeField(required=True)
-    end = serializers.DateTimeField(required=True)
     teams = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     players = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     stages = TournamentStageSerializer(many=True, read_only=True)
-    max_team_size = serializers.IntegerField(required=False)
-    min_team_size = serializers.IntegerField(required=False)
-
-    mathces_count = serializers.IntegerField(required=False)
-
-    # Swiss
-    win_points = serializers.FloatField(required=False)
-    draw_points = serializers.FloatField(required=False)
-    rounds_count = serializers.IntegerField(required=False)
 
     is_registration_available = serializers.SerializerMethodField()
 
     class Meta:
         model = Tournament
-        fields = ['id', 'name', 'start', 'end', 'register_open_until', 'is_registration_available', 'owner', 'enter_price', 'sport',
-                  'photos', 'photos_base64', 'max_participants', 'participants',
-                  'moderators', 'auto_accept_participants', 'is_team_tournament',
-                  'max_team_size', 'min_team_size', 'win_points', 'draw_points',
+        fields = ['id', 'name', 'description', 'city', 'start', 'end', 'register_open_until', 'is_registration_available', 'owner', 'enter_price', 'sport',
+                  'photos', 'photos_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'allow_not_full_teams',
+                  'is_team_tournament', 'max_team_size', 'min_team_size', 'win_points', 'draw_points',
+                  'final_stage_advance_count', 'participants_in_group', 'check_score_difference_on_draw',
                   'rounds_count', 'mathces_count', 'requests', 'prize_pool', 'city', 'rules',
-                  'tournament_type', 'bracket', 'teams', 'players', 'stages']
+                  'tournament_type', 'bracket', 'teams', 'players', 'stages']                  
+
+    def __init__(self, *args, **kwargs):
+        super(TournamentSerializer, self).__init__(*args, **kwargs)
+        required_fields = ['name', 'start', 'end', 'bracket', 'tournament_type']
+
+        # Устанавливаем поля из списка как обязательные
+        for field_name in required_fields:
+            if field_name in self.fields:
+                self.fields[field_name].required = True
 
     @transaction.atomic
     def create(self, validated_data):
