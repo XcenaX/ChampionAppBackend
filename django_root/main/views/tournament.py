@@ -1,4 +1,3 @@
-from turtle import position
 from main.all_models.tournament import Match, Participant, StageResult, Tournament, Team, TournamentStage
 
 from champion_backend.settings import EMAIL_HOST_USER

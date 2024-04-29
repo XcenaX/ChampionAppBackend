@@ -1,6 +1,6 @@
 import django_filters
 from main.all_models.match import AmateurMatch
-from main.all_models.tournament import Tournament
+from main.all_models.tournament import Tournament, Team
 
 class AmateurMatchFilter(django_filters.FilterSet):
     name = django_filters.CharFilter(lookup_expr='icontains')
@@ -39,3 +39,14 @@ class TournamentFilter(django_filters.FilterSet):
     class Meta:
         model = Tournament
         fields = ['name', 'sport', 'enter_price', 'start']
+
+
+class TeamFilter(django_filters.FilterSet):
+    name = django_filters.CharFilter(lookup_expr='icontains')
+
+    sport = django_filters.NumberFilter(field_name='sport__id')
+    sport_name = django_filters.CharFilter(field_name='sport__name', lookup_expr='icontains')
+
+    class Meta:
+        model = Team
+        fields = ['name', 'sport']

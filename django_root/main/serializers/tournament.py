@@ -17,18 +17,7 @@ from main.services.img_functions import _decode_photo
 
 from main.enums import REGISTER_OPEN_UNTIL
 
-
-class TeamSerializer(serializers.ModelSerializer):
-    sport = SportField(many=False, read_only=False, required=True)
-    members = serializers.SerializerMethodField()
-
-    def get_members(self, obj):
-        moderators_data = [UserSerializer(user).data for user in obj.members.all()]
-        return moderators_data
-    
-    class Meta:
-        model = Team
-        fields = ['id', 'sport', 'name', 'logo', 'members']
+from main.serializers.team import TeamSerializer
 
 
 class TournamentListTeamSerializer(serializers.ModelSerializer):
@@ -188,12 +177,12 @@ class TournamentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tournament
-        fields = ['id', 'name', 'description', 'city', 'start', 'end', 'register_open_until', 'is_registration_available', 'owner', 'enter_price', 'sport',
+        fields = ['id', 'name', 'description', 'address', 'city', 'start', 'end', 'register_open_until', 'is_registration_available', 'owner', 'enter_price', 'sport',
                   'photos', 'photos_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'allow_not_full_teams',
                   'is_team_tournament', 'max_team_size', 'min_team_size', 'win_points', 'draw_points',
                   'final_stage_advance_count', 'participants_in_group', 'check_score_difference_on_draw',
-                  'rounds_count', 'mathces_count', 'requests', 'prize_pool', 'city', 'rules',
-                  'tournament_type', 'bracket', 'teams', 'players', 'stages']                  
+                  'rounds_count', 'mathces_count', 'requests', 'prize_pool', 'first_place_prize', 'second_place_prize', 'third_place_prize',
+                  'city', 'rules', 'tournament_type', 'bracket', 'teams', 'players', 'stages']                  
 
     def __init__(self, *args, **kwargs):
         super(TournamentSerializer, self).__init__(*args, **kwargs)

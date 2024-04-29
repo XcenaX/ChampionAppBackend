@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from main.views.team import TeamViewSet
 from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchParticipants, AmateurMatchViewSet, DeclineMatch, DeleteMatchParticipants, JoinMatch, LeaveMatch, MyMatches, RefuseMatchRequest
 
 from main.views.city import CityRequest
@@ -16,6 +17,7 @@ router = DefaultRouter()
 router.register(r'amateur-matches', AmateurMatchViewSet)
 router.register(r'tournaments', TournamentViewSet)
 router.register(r'sports', SportViewSet)
+router.register(r'teams', TeamViewSet)
 
 urlpatterns = [
     path('user/', UserDetail.as_view(), name='user_detail'),
