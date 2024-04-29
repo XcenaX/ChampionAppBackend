@@ -17,7 +17,7 @@ class Tournament(models.Model):
     register_open_until = models.CharField(choices=REGISTER_OPEN_UNTIL, default="15 мин", max_length=50, verbose_name="Регистрация открыта до...")
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, verbose_name='Вид спорта', db_index=True)
     enter_price = models.IntegerField(verbose_name='Цена участия', db_index=True, validators=[MinValueValidator(0), MaxValueValidator(10000000)],)
-    prize_pool = models.IntegerField(verbose_name='Призовой фонд')
+    prize_pool = models.IntegerField(verbose_name='Призовой фонд', validators=[MinValueValidator(1), MaxValueValidator(10000000)])
     first_place_prize = models.IntegerField(blank=True, null=True, verbose_name='Награда за 1 место', validators=[MinValueValidator(1), MaxValueValidator(10000000)],)
     second_place_prize = models.IntegerField(blank=True, null=True, verbose_name='Награда за 2 место', validators=[MinValueValidator(1), MaxValueValidator(10000000)],)
     third_place_prize = models.IntegerField(blank=True, null=True, verbose_name='Награда за 3 место', validators=[MinValueValidator(1), MaxValueValidator(10000000)],)
