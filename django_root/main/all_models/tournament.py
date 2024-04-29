@@ -38,6 +38,7 @@ class Tournament(models.Model):
     active_stage_position = models.IntegerField(default=1, verbose_name='Позиция активного этапа')
     
     BO_number = models.IntegerField(default=1, verbose_name='Количество встреч в матче')
+    group_stage_BO_number = models.IntegerField(default=1, verbose_name='Количество встреч в матче (Групповой этап)')
 
     # Swiss
     win_points = models.FloatField(blank=True, null=True, verbose_name='Очки за победу')

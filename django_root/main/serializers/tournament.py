@@ -181,7 +181,7 @@ class TournamentSerializer(serializers.ModelSerializer):
                     'photos', 'photos_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'allow_not_full_teams',
                     'is_team_tournament', 'max_team_size', 'min_team_size',
                     'group_stage_win_points', 'group_stage_draw_points', 'group_stage_rounds_count',
-                    'win_points', 'draw_points', 'rounds_count', 'mathces_count', 'BO_number',
+                    'win_points', 'draw_points', 'rounds_count', 'mathces_count', 'BO_number', 'group_stage_BO_number',
                     'final_stage_advance_count', 'participants_in_group', 'check_score_difference_on_draw',
                     'requests', 'prize_pool', 'first_place_prize', 'second_place_prize', 'third_place_prize',
                     'city', 'rules', 'tournament_type', 'bracket', 'teams', 'players', 'stages']                  
