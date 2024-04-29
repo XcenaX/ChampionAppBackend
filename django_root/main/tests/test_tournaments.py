@@ -62,7 +62,9 @@ class TournamentsTests(APITestCase):
             'sport': self.sport.id,
             'max_participants': 8,
             'city': "Астана",
+            'address': "ojfosjfosf",
             'bracket': bracket,
+            "tournament_type": 0,
             'prize_pool': 100000,
             'place': self.place,            
             'auto_accept_participants': auto_accept,
@@ -82,7 +84,7 @@ class TournamentsTests(APITestCase):
         url = reverse('join_tournament')
         data = {'tournament': self.tournament.id}
         response = self.client.post(url, data, format='json')
-
+        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         if auto_accept:
             self.assertTrue(self.tournament.participants.filter(user__id=self.users[1].id).exists())
@@ -107,7 +109,8 @@ class TournamentsTests(APITestCase):
 
         url = reverse('accept_tournament_request')
         data = {'tournament': self.tournament.id, 'user': self.users[1].id}
-        response = self.client.post(url, data, format='json')          
+        response = self.client.post(url, data, format='json')
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(self.tournament.participants.filter(user__id=self.users[1].id).exists())
         self.assertFalse(self.tournament.users_requests.filter(id=self.users[1].id).exists())
@@ -118,9 +121,9 @@ class TournamentsTests(APITestCase):
         
         token = self.login_user(self.users[0].email)
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
-
         url = reverse('refuse_tournament_request')
         data = {'tournament': self.tournament.id, 'user': self.users[1].id}
         response = self.client.post(url, data, format='json')
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(self.tournament.users_requests.filter(id=self.users[1].id).exists())

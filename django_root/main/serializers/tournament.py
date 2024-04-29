@@ -179,9 +179,11 @@ class TournamentSerializer(serializers.ModelSerializer):
         model = Tournament
         fields = ['id', 'name', 'description', 'address', 'city', 'start', 'end', 'register_open_until', 'is_registration_available', 'owner', 'enter_price', 'sport',
                   'photos', 'photos_base64', 'max_participants', 'participants', 'moderators', 'auto_accept_participants', 'allow_not_full_teams',
-                  'is_team_tournament', 'max_team_size', 'min_team_size', 'win_points', 'draw_points',
+                  'is_team_tournament', 'max_team_size', 'min_team_size',
+                  'group_stage_win_points', 'group_stage_draw_points', 'group_stage_rounds_count',
+                  'win_points', 'draw_points', 'rounds_count',
                   'final_stage_advance_count', 'participants_in_group', 'check_score_difference_on_draw',
-                  'rounds_count', 'mathces_count', 'requests', 'prize_pool', 'first_place_prize', 'second_place_prize', 'third_place_prize',
+                  'mathces_count', 'requests', 'prize_pool', 'first_place_prize', 'second_place_prize', 'third_place_prize',
                   'city', 'rules', 'tournament_type', 'bracket', 'teams', 'players', 'stages']                  
 
     def __init__(self, *args, **kwargs):
@@ -275,8 +277,6 @@ class TournamentSerializer(serializers.ModelSerializer):
     def get_is_registration_available(self, obj):
         REGISTER_OPEN_UNTIL_DICT = dict(REGISTER_OPEN_UNTIL)
         registration_end_time = obj.start - REGISTER_OPEN_UNTIL_DICT.get(obj.register_open_until, timedelta(minutes=15))
-        print(timezone.now(), type(timezone.now()))
-        print(registration_end_time, type(registration_end_time))
         return timezone.now() < registration_end_time
 
     def get_photos(self, obj):

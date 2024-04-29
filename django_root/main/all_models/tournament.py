@@ -50,6 +50,10 @@ class Tournament(models.Model):
     # Двуступенчатый турнир
     final_stage_advance_count = models.IntegerField(default=2, verbose_name='Количество команд которые проходят в плей-офф')
     participants_in_group = models.IntegerField(default=2, verbose_name='Количество участников в группе')
+    group_stage_win_points = models.FloatField(blank=True, null=True, verbose_name='Очки за победу (Групповой этап)')
+    group_stage_draw_points = models.FloatField(blank=True, null=True, verbose_name='Очки за ничью (Групповой этап)')
+    group_stage_rounds_count = models.IntegerField(blank=True, null=True, verbose_name='Кол-во туров (Групповой этап)')
+
 
     def get_active_stage(self):
         try:
