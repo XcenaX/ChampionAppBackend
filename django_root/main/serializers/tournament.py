@@ -204,7 +204,7 @@ class TournamentSerializer(serializers.ModelSerializer):
                   'moderators', 'auto_accept_participants', 'is_team_tournament',
                   'max_team_size', 'min_team_size', 'win_points', 'draw_points',
                   'rounds_count', 'mathces_count', 'requests', 'prize_pool', 'city', 'rules',
-                  'bracket', 'teams', 'players', 'stages']
+                  'tournament_type', 'bracket', 'teams', 'players', 'stages']
 
     @transaction.atomic
     def create(self, validated_data):
