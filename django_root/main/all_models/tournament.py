@@ -1,5 +1,6 @@
+from turtle import position
 from django.db import models
-from main.enums import MATCH_STATUS, TOURNAMENT_TYPE, TOURNAMENT_BRACKET_TYPE
+from main.enums import MATCH_STATUS, TOURNAMENT_TYPE, TOURNAMENT_BRACKET_TYPE, REGISTER_OPEN_UNTIL
 from main.models import User
 from main.all_models.sport import Sport
 from main.all_models.team import Team
@@ -13,8 +14,9 @@ class Tournament(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_tournaments', verbose_name='Владелец')
     city = models.TextField(verbose_name='Город', default="")    
     description = models.TextField(verbose_name='Описание', default="")
-    start = models.DateTimeField(verbose_name='Дата и время начала регистрации', blank=True, null=True, db_index=True)
-    end = models.DateTimeField(verbose_name='Дата и время окончания регистрации', blank=True, null=True, db_index=True)
+    start = models.DateTimeField(verbose_name='Дата и время начала турнира', blank=True, null=True, db_index=True)
+    end = models.DateTimeField(verbose_name='Дата и время окончания турнира', blank=True, null=True, db_index=True)
+    register_open_until = models.CharField(choices=REGISTER_OPEN_UNTIL, default="15 мин", max_length=50, verbose_name="Регистрация открыта до...")
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, verbose_name='Вид спорта', db_index=True)
     enter_price = models.IntegerField(verbose_name='Цена участия', db_index=True)
     prize_pool = models.IntegerField(verbose_name='Призовой фонд')
@@ -32,7 +34,7 @@ class Tournament(models.Model):
     auto_accept_participants = models.BooleanField(default=False, verbose_name='Автоматически принимать всех')
     allow_not_full_teams = models.BooleanField(default=False, verbose_name='Разрешить участвовать командам с неполными составами')
     is_team_tournament = models.BooleanField(default=False, verbose_name='Командный турнир')
-
+    active_stage_position = models.IntegerField(default=1, verbose_name='Позиция активного этапа')
     # Swiss
     win_points = models.FloatField(blank=True, null=True, verbose_name='Очки за победу')
     draw_points = models.FloatField(blank=True, null=True, verbose_name='Очки за ничью')
@@ -43,7 +45,24 @@ class Tournament(models.Model):
     
     # Round Robin
     mathces_count = models.IntegerField(blank=True, null=True, verbose_name='Количество игр с каждым игроком')
+    
+    # Двуступенчатый турнир
+    final_stage_advance_count = models.IntegerField(default=2, verbose_name='Количество команд которые проходят в плей-офф')
+    participants_in_group = models.IntegerField(default=2, verbose_name='Количество участников в группе')
 
+    def get_active_stage(self):
+        try:
+            return TournamentStage.objects.get(tournament=self, position=self.active_stage_position)
+        except:
+            return None
+        
+    def has_next_stage(self):
+        try:
+            TournamentStage.objects.get(tournament=self, position=self.active_stage_position+1)
+            return True
+        except:
+            return False            
+        
     def have_played(self, participant1, participant2):
         return Match.objects.filter(
             models.Q(participant1=participant1, participant2=participant2) |
@@ -53,6 +72,13 @@ class Tournament(models.Model):
 
     def is_full(self):
         return self.max_participants == self.participants.count()+1
+
+    def get_participants_for_groups(self, groups_count):
+        """Возвращает списки участников для каждой группы Двуступенчатого турнира"""
+        participants = list(Participant.objects.filter(tournament=self))
+        k, m = divmod(len(participants), groups_count)
+        
+        return (participants[i*k + min(i, m):(i+1)*k + min(i+1, m)] for i in range(groups_count))
 
     class Meta:
         verbose_name = 'Турнир'
@@ -72,6 +98,7 @@ class TournamentStage(models.Model):
     end = models.DateTimeField(verbose_name='Окончание этапа', blank=True, null=True,)
     name = models.CharField(max_length=255, verbose_name='Название этапа')
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='stages', verbose_name='Турнир этапа')
+    position = models.IntegerField(default=1, verbose_name='Позиция этапа (какой он идёт по счету)')
 
     class Meta:
         verbose_name = 'Этап турнира'
@@ -85,6 +112,7 @@ class Participant(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, blank=True, null=True)
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='participants', verbose_name='Учатник турнира')
+    place = models.IntegerField(blank=True, null=True, verbose_name="Место в турнире")
     
     # Swiss, Leaderboard
     score = models.FloatField(default=0.0, verbose_name="Общий счет")

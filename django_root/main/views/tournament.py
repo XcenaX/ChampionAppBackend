@@ -1,3 +1,4 @@
+from turtle import position
 from main.all_models.tournament import Match, Participant, StageResult, Tournament, Team, TournamentStage
 
 from champion_backend.settings import EMAIL_HOST_USER
@@ -33,6 +34,8 @@ from main.services.img_functions import _decode_photo
 from django.db.models import Min, Max
 from rest_framework import serializers
 from django.db.models import Count
+
+from main.services.tournament import assign_final_positions, assign_final_positions_elimination
 
 class TournamentViewSet(viewsets.ModelViewSet):
     filter_backends = (DjangoFilterBackend,)
@@ -247,82 +250,77 @@ class UpdateTournament(APIView):
                     match.participant1.save()
                     match.participant2.save()
                     
-            if tournament.bracket == 0: # single
-                if match.next_match:
-                    if not match.next_match.participant1:
-                        match.next_match.participant1 = winner
-                    elif not match.next_match.participant2:
-                        match.next_match.participant2 = winner
-                    match.next_match.save()
-            if tournament.bracket == 1: # double
-                if match.next_match:
-                    if not match.next_match.participant1:
-                        match.next_match.participant1 = winner
-                    elif not match.next_match.participant2:
-                        match.next_match.participant2 = winner
-                    match.next_match.save()
+                if tournament.bracket == 0: # single
+                    if match.next_match:
+                        if not match.next_match.participant1:
+                            match.next_match.participant1 = winner
+                        elif not match.next_match.participant2:
+                            match.next_match.participant2 = winner
+                        match.next_match.save()
+                elif tournament.bracket == 1: # double
+                    if match.next_match:
+                        if not match.next_match.participant1:
+                            match.next_match.participant1 = winner
+                        elif not match.next_match.participant2:
+                            match.next_match.participant2 = winner
+                        match.next_match.save()
 
-                if match.next_lose_match:
-                    if not match.next_lose_match.participant1:
-                        match.next_lose_match.participant1 = loser
-                    elif not match.next_lose_match.participant2:
-                        match.next_lose_match.participant2 = loser
-                    match.next_lose_match.save()
-            elif tournament.bracket == 2: # round
-                pass # Новые матчи создавать не нужно (пока что)
-            elif tournament.bracket == 3 or tournament.bracket == 4 and tournament.stages.count() != tournament.rounds_count: # swiss
-                last_stage = tournament.stages.last()
-                print(last_stage)
-                if last_stage:
-                    # Проверяем, завершены ли все матчи последнего этапа
-                    if all(match.status == 2 for match in last_stage.matches.all()):                        
-                        if tournament.stages.count() < tournament.rounds_count:
-                            new_stage = TournamentStage.objects.create(
-                                name=f"Этап {tournament.stages.count() + 1}",                                        
-                            )
-                            
-                            self.create_new_swiss_round(new_stage, tournament)
-
-                            tournament.stages.add(new_stage)                
+                    if match.next_lose_match:
+                        if not match.next_lose_match.participant1:
+                            match.next_lose_match.participant1 = loser
+                        elif not match.next_lose_match.participant2:
+                            match.next_lose_match.participant2 = loser
+                        match.next_lose_match.save()                       
 
             return Response({'success': True, 'message': 'Турнир обновлен!'}, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({'success': False, 'message': f'Ошибка при обновлении: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         
-    def create_new_swiss_round(self, stage, tournament):
-        participants = list(tournament.participants.all())
-        # Сортировка участников по их текущему счету в убывающем порядке
-        participants.sort(key=lambda x: x.score, reverse=True)
-        print(participants)
 
-        # Организация пар на основе текущих результатов
-        # Используем жадный метод для создания пар, чтобы максимально сбалансировать уровень соперников
-        used = set()
-        pairs = []
+class EndTournamentStage(APIView):
+    permission_classes = [IsAuthenticated]
 
-        for participant in participants:
-            if participant not in used:
-                best_match = None
-                # Ищем наиболее подходящего соперника, не игравшего с данным участником
-                for potential_opponent in participants:
-                    if potential_opponent not in used and potential_opponent != participant and not tournament.have_played(participant, potential_opponent):
-                        best_match = potential_opponent
-                        break
-                if best_match:
-                    pairs.append((participant, best_match))
-                    used.add(participant)
-                    used.add(best_match)
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
 
-        # Создаем матчи на основе сформированных пар
-        for participant1, participant2 in pairs:
-            match = Match.objects.create(
-                participant1=participant1,
-                participant2=participant2,                
-            )
-            stage.matches.add(match)
+            tournament_id = data["tournament"]
+            tournament = Tournament.objects.get(id=tournament_id)
+            
+            if tournament.owner != request.user or not tournament.moderators.exists(request.user):
+                return Response({'success': False, 'message': "Только организатор или модераторы могут завершить этап!"}, status=status.HTTP_400_BAD_REQUEST) 
 
+            active_stage = tournament.get_active_stage()
+            
+            if tournament.bracket in [2, 3, 4] and tournament.stages.count() != tournament.rounds_count: # swiss
+                # Проверяем, завершены ли все матчи активного этапа
+                mathces = Match.objects.filter(stage=active_stage)
+                stages_count = TournamentStage.objects.filter(tournament=tournament).count() 
+                if all(match.status == 2 for match in mathces):                        
+                    if tournament.bracket in [3, 4] and stages_count < tournament.rounds_count:
+                        tournament.active_stage_position += 1
+                        new_stage = TournamentStage.objects.create(
+                            name=f"Этап {stages_count + 1}",
+                            tournament=tournament,
+                            position=tournament.active_stage_position                            
+                        )
+                        self.create_new_swiss_round(new_stage, tournament)    
+                    else:
+                        assign_final_positions(tournament)
+            
+            elif tournament.has_next_stage():
+                tournament.active_stage_position += 1
+            else:
+                if tournament.bracket in [0, 1]: # Single / Double elimination                                         
+                    assign_final_positions_elimination(tournament, active_stage)                    
 
+            tournament.save()
+        except Exception as error:
+            return Response({'success': False, 'message': error}, status=status.HTTP_400_BAD_REQUEST) 
+
+    
+    
 class JoinTournament(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -1,4 +1,5 @@
-import math
+from datetime import timedelta
+from django.utils import timezone
 from rest_framework import serializers
 from main.all_models.team import Team
 from main.all_models.tournament import StageResult, Tournament, TournamentStage, Participant, Match, TournamentPhoto
@@ -6,16 +7,15 @@ from main.all_models.tournament import StageResult, Tournament, TournamentStage,
 from main.models import User
 from main.serializers.sport import SportField, TournamentListSportSerializer
 
-from django.core.exceptions import ObjectDoesNotExist
+from main.services.tournament import create_double_elimination_bracket, create_leaderboard_bracket, create_round_robin_bracket, create_single_elimination_bracket, create_swiss_bracket, create_round_robin_bracket_2step
 
 from main.serializers.user import AmateurMatchUserSerializer, TournamentListUserSerializer, TournamentUserSerializer, UserSerializer
-from django.core.exceptions import ObjectDoesNotExist
 
 from django.db import transaction
 
 from main.services.img_functions import _decode_photo
 
-import random
+from main.enums import REGISTER_OPEN_UNTIL
 
 
 class TeamSerializer(serializers.ModelSerializer):
@@ -197,9 +197,11 @@ class TournamentSerializer(serializers.ModelSerializer):
     draw_points = serializers.FloatField(required=False)
     rounds_count = serializers.IntegerField(required=False)
 
+    is_registration_available = serializers.SerializerMethodField()
+
     class Meta:
         model = Tournament
-        fields = ['id', 'name', 'start', 'end', 'owner', 'enter_price', 'sport',
+        fields = ['id', 'name', 'start', 'end', 'register_open_until', 'is_registration_available', 'owner', 'enter_price', 'sport',
                   'photos', 'photos_base64', 'max_participants', 'participants',
                   'moderators', 'auto_accept_participants', 'is_team_tournament',
                   'max_team_size', 'min_team_size', 'win_points', 'draw_points',
@@ -214,6 +216,8 @@ class TournamentSerializer(serializers.ModelSerializer):
         photos_base64 = validated_data.pop('photos_base64', [])
         
         tournament = Tournament.objects.create(**validated_data)
+
+        participants = list(Participant.objects.filter(tournament=tournament))
 
         photos = []
         for photo_base64 in photos_base64:
@@ -242,268 +246,27 @@ class TournamentSerializer(serializers.ModelSerializer):
         
         if not teams and not players: # Если начальные участники не переданы сетку не создаем
             return tournament
-                      
-        if tournament.bracket == 0:  # Single Elimination
-            self.create_single_elimination_bracket(tournament, matches_data)
+
+        if tournament.tournament_type == 1:  # Двуступенчатый турнир
+            create_round_robin_bracket_2step(tournament)
+
+        elif tournament.bracket == 0:  # Single Elimination
+            create_single_elimination_bracket(tournament, matches_data, participants)
 
         elif tournament.bracket == 1:  # Double Elimination
-            self.create_double_elimination_bracket(tournament, matches_data)
+            create_double_elimination_bracket(tournament, matches_data, participants)
 
         elif tournament.bracket == 2:  # Round Robin
-            self.create_round_robin_bracket(tournament, matches_data)
+            create_round_robin_bracket(tournament, matches_data, participants)
         
         elif tournament.bracket == 3:  # Swiss or Leaderboard
-            self.create_swiss_bracket(tournament, matches_data)
+            create_swiss_bracket(tournament, matches_data, participants)
 
         elif tournament.bracket == 4:
-            self.create_leaderboard_bracket(tournament)
+            create_leaderboard_bracket(tournament)
 
         tournament.save()
         return tournament
-
-    def create_single_elimination_bracket(self, tournament, matches_data):
-        num_participants = tournament.max_participants
-        if num_participants == 0:
-            num_rounds = 0
-        else:
-            num_rounds = math.ceil(math.log2(num_participants))
-        current_matches = []
-        unselected_participants = list(Participant.objects.filter(tournament=tournament))
-        
-        num_matches_in_round_one = num_participants // 2
-        
-        is_players_are_users = False
-        if unselected_participants[0].user:
-            is_players_are_users = True
-        
-        for round_number in range(1, num_rounds + 1):
-            stage_name = self.get_stage_name(round_number, num_rounds)
-            stage = TournamentStage.objects.create(name=stage_name, tournament=tournament)
-            new_matches = []
-            match_count = 0
-            if round_number == 1:
-                for i in range(num_matches_in_round_one):
-                    match_info = matches_data[i] if i < len(matches_data) else None
-                    scheduled_start = None
-                    participants_ids = []
-                    if match_info:
-                        scheduled_start = match_info.get('scheduled_start')
-                        participants_ids = match_info.get('participants', [])
-                    
-                    participant1 = None
-                    participant2 = None
-
-                    if participants_ids:
-                        if is_players_are_users:
-                            participant1 = next((p for p in unselected_participants if p.user.id == participants_ids[0]), None)
-                            participant2 = next((p for p in unselected_participants if p.user.id == participants_ids[1]), None)
-                        else:
-                            participant1 = next((p for p in unselected_participants if p.team.id == participants_ids[0]), None)
-                            participant2 = next((p for p in unselected_participants if p.team.id == participants_ids[1]), None)
-
-                        if participant1:
-                            unselected_participants.remove(participant1)
-                        if participant2:
-                            unselected_participants.remove(participant2)
-                    else:
-                        participant1 = unselected_participants.pop() if unselected_participants else None
-                        participant2 = unselected_participants.pop() if unselected_participants else None
-
-                    match = Match.objects.create(
-                        scheduled_start=scheduled_start,
-                        participant1=participant1,
-                        participant2=participant2,
-                        stage=stage
-                    )
-                    new_matches.append(match)
-                    match_count += 1                 
-            else:
-                for i in range(0, len(current_matches), 2):
-                    new_match = Match.objects.create(stage=stage)
-                    current_matches[i].next_match = new_match
-                    if i + 1 < len(current_matches):
-                        current_matches[i + 1].next_match = new_match
-                    current_matches[i].save()
-                    if i + 1 < len(current_matches):
-                        current_matches[i + 1].save()
-                    new_matches.append(new_match)
-
-            current_matches = new_matches
-    
-    def get_stage_name(self, round_number, num_rounds):
-        if round_number == num_rounds:
-            return "Финал"
-        elif round_number == num_rounds - 1:
-            return "Полуфинал"
-        else:
-            return f"Этап {round_number}"
-    
-    def create_double_elimination_bracket(self, tournament, matches_data):
-        num_participants = tournament.max_participants
-        num_rounds_upper = math.ceil(math.log2(num_participants))
-        num_rounds_lower = num_rounds_upper - 1
-
-        num_matches_in_round_one = num_participants // 2
-
-        unselected_participants = list(Participant.objects.filter(tournament=tournament))
-        
-        is_players_are_users = False
-        if unselected_participants[0].user:
-            is_players_are_users = True
-
-        # Списки для хранения матчей в верхней и нижней сетке
-        upper_matches = [[] for _ in range(num_rounds_upper)]
-        lower_matches = [[] for _ in range(num_rounds_lower + 1)]  # +1 для дополнительного раунда в нижней сетке
-
-        
-        for round_number in range(num_rounds_upper):
-            stage = TournamentStage.objects.create(name=f"Верхняя сетка - Этап {round_number + 1}", tournament=tournament)
-            if round_number == 0:
-                # Создание начальных матчей из matches_data
-                for i in range(num_matches_in_round_one):
-                    match_info = matches_data[i] if i < len(matches_data) else None
-                    scheduled_start = None
-                    participants_ids = []
-                    if match_info:
-                        scheduled_start = match_info.get('scheduled_start')
-                        participants_ids = match_info.get('participants', [])
-
-                    participant1 = None
-                    participant2 = None
-
-                    if participants_ids:
-                        if is_players_are_users:
-                            participant1 = next((p for p in unselected_participants if p.user.id == participants_ids[0]), None)
-                            participant2 = next((p for p in unselected_participants if p.user.id == participants_ids[1]), None)
-                        else:
-                            participant1 = next((p for p in unselected_participants if p.team.id == participants_ids[0]), None)
-                            participant2 = next((p for p in unselected_participants if p.team.id == participants_ids[1]), None)
-
-                        if participant1 in unselected_participants:
-                            unselected_participants.remove(participant1)
-                        if participant2 in unselected_participants:
-                            unselected_participants.remove(participant2)
-                    else:
-                        participant1 = unselected_participants.pop() if unselected_participants else None
-                        participant2 = unselected_participants.pop() if unselected_participants else None
-
-                    match = Match.objects.create(
-                        scheduled_start=scheduled_start,
-                        participant1=participant1,
-                        participant2=participant2, 
-                        stage=stage,                           
-                    )
-                    upper_matches[0].append(match)
-            else:
-                # Создание следующих раундов для победителей предыдущих матчей
-                for i in range(0, len(upper_matches[round_number - 1]), 2):
-                    match = Match.objects.create(stage=stage)
-                    upper_matches[round_number].append(match)
-                    # Назначаем следующие матчи для победителей
-                    if i < len(upper_matches[round_number - 1]) - 1:
-                        upper_matches[round_number - 1][i].next_match = match
-                        upper_matches[round_number - 1][i + 1].next_match = match
-                        upper_matches[round_number - 1][i].save()
-                        upper_matches[round_number - 1][i + 1].save()
-
-        # Обработка нижней сетки
-        for round_number in range(num_rounds_lower):
-            stage = TournamentStage.objects.create(name=f"Нижняя сетка - Этап {round_number + 1}", tournament=tournament)
-            num_matches = max(1, len(lower_matches[round_number]) // 2)
-            for _ in range(num_matches):
-                match = Match.objects.create(stage=stage)
-                lower_matches[round_number + 1].append(match)
-
-            # Связываем проигравших с матчами в нижней сетке
-            if round_number == 0:
-                for i, upper_match in enumerate(upper_matches[0]):
-                    if i % 2 == 0:
-                        loser_match = Match.objects.create(stage=stage)
-                        upper_match.next_lose_match = loser_match
-                        upper_match.save()
-                        lower_matches[0].append(loser_match)
-
-        # Финал между победителями верхней и нижней сетки
-        final_stage = TournamentStage.objects.create(name="Финал", tournament=tournament)
-        final_match = Match.objects.create(stage=final_stage)
-        upper_matches[-1][0].next_match = final_match
-        lower_matches[-1][0].next_match = final_match
-        upper_matches[-1][0].save()
-        lower_matches[-1][0].save()
-
-    def create_round_robin_bracket(self, tournament):
-        participants = list(Participant.objects.filter(tournament=tournament))
-        matches_count = tournament.matches_count if tournament.matches_count else 1
-        
-        round_number = 1
-
-        for _ in range(matches_count):
-            for i in range(len(participants)):
-                for j in range(i + 1, len(participants)):
-                    stage_name = f"Этап {round_number}"
-                    stage = TournamentStage.objects.create(name=stage_name, tournament=tournament)                    
-                    Match.objects.create(
-                        participant1=participants[i],
-                        participant2=participants[j],
-                        stage=stage
-                    )
-                    round_number += 1
-
-    def create_swiss_bracket(self, tournament, matches_data):
-        participants = list(Participant.objects.filter(tournament=tournament))
-        num_participants = len(participants)
-
-        unselected_participants = list(Participant.objects.filter(tournament=tournament))
-        
-        is_players_are_users = False
-        if unselected_participants[0].user:
-            is_players_are_users = True
-
-        stage_name = "Этап 1"
-        stage = TournamentStage.objects.create(name=stage_name, tournament=tournament)
-
-        random.shuffle(participants)
-        for i in range(0, num_participants, 2):
-            if i + 1 < num_participants:
-                match_info = matches_data[i] if i < len(matches_data) else None
-                scheduled_start = None
-                participants_ids = []
-                if match_info:
-                    scheduled_start = match_info.get('scheduled_start')
-                    participants_ids = match_info.get('participants', [])
-
-                participant1 = None
-                participant2 = None
-
-                if participants_ids:
-                    if is_players_are_users:
-                        participant1 = next((p for p in unselected_participants if p.user.id == participants_ids[0]), None)
-                        participant2 = next((p for p in unselected_participants if p.user.id == participants_ids[1]), None)
-                    else:
-                        participant1 = next((p for p in unselected_participants if p.team.id == participants_ids[0]), None)
-                        participant2 = next((p for p in unselected_participants if p.team.id == participants_ids[1]), None)
-
-                    if participant1 in unselected_participants:
-                        unselected_participants.remove(participant1)
-                    if participant2 in unselected_participants:
-                        unselected_participants.remove(participant2)
-                else:
-                    participant1 = unselected_participants.pop() if unselected_participants else None
-                    participant2 = unselected_participants.pop() if unselected_participants else None
-                
-                Match.objects.create(
-                    participant1=participant1,
-                    participant2=participant2,
-                    scheduled_start=scheduled_start,
-                    stage=stage
-                )
-    
-    def create_leaderboard_bracket(self, tournament):
-        # Каждый этап будет как событие(тур) турнира
-        rounds_count = max(tournament.rounds_count, 1)
-        for i in range(1, rounds_count+1):
-            stage_name = f"Этап {i}"
-            TournamentStage.objects.create(name=stage_name, tournament=tournament)            
 
     def update(self, instance, validated_data):
         photo_base64 = validated_data.pop('photo_base64', None)
@@ -523,6 +286,13 @@ class TournamentSerializer(serializers.ModelSerializer):
         for request in obj.teams_requests.all():
             requests_data.append(TeamSerializer(request).data)
         return requests_data
+
+    def get_is_registration_available(self, obj):
+        REGISTER_OPEN_UNTIL_DICT = dict(REGISTER_OPEN_UNTIL)
+        registration_end_time = obj.start - REGISTER_OPEN_UNTIL_DICT.get(obj.register_open_until, timedelta(minutes=15))
+        print(timezone.now(), type(timezone.now()))
+        print(registration_end_time, type(registration_end_time))
+        return timezone.now() < registration_end_time
 
     def get_photos(self, obj):
         photos_data = [TournamentPhotoSerializer(photo).data['photo'] for photo in obj.photos.all()]

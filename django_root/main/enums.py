@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+
 TOURNAMENT_BRACKET_TYPE = (
     (0, 'Signle Elimination'),
     (1, 'Double Elimination'),
@@ -40,6 +43,16 @@ ROLE_CHOICES = (
 DEGREE_CHOICES = (
     (0, 'Любитель'),
     (1, 'Профессионал'),
+)
+
+REGISTER_OPEN_UNTIL = (
+    ('15 мин', timedelta(minutes=15)),
+    ('30 мин', timedelta(minutes=30)),
+    ('1 час', timedelta(hours=1)),
+    ('2 часа', timedelta(hours=2)),
+    ('6 часов', timedelta(hours=6)),
+    ('1 день', timedelta(days=1)),
+    ('2 дня', timedelta(days=2)),
 )
 
 def get_list_from_tuple(choice_tuples):
