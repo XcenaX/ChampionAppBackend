@@ -36,6 +36,9 @@ class Tournament(models.Model):
     allow_not_full_teams = models.BooleanField(default=False, verbose_name='Разрешить участвовать командам с неполными составами')
     is_team_tournament = models.BooleanField(default=False, verbose_name='Командный турнир')
     active_stage_position = models.IntegerField(default=1, verbose_name='Позиция активного этапа')
+    
+    BO_number = models.IntegerField(default=1, verbose_name='Количество встреч в матче')
+
     # Swiss
     win_points = models.FloatField(blank=True, null=True, verbose_name='Очки за победу')
     draw_points = models.FloatField(blank=True, null=True, verbose_name='Очки за ничью')
