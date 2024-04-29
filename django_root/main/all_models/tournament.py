@@ -1,12 +1,9 @@
-from turtle import position
 from django.db import models
 from main.enums import MATCH_STATUS, TOURNAMENT_TYPE, TOURNAMENT_BRACKET_TYPE, REGISTER_OPEN_UNTIL
 from main.models import User
 from main.all_models.sport import Sport
 from main.all_models.team import Team
-
-from django.db.models.signals import pre_delete
-from django.dispatch import receiver
+from django.core.validators import MinValueValidator, MaxValueValidator
  
 
 class Tournament(models.Model):
@@ -24,7 +21,7 @@ class Tournament(models.Model):
     users_requests = models.ManyToManyField(User, related_name='users_requests_tournament', verbose_name='Инливидуальные запросы на участие')
     teams_requests = models.ManyToManyField(Team, related_name='_teams_requests_tournament', verbose_name='Командные запросы на участие')
     moderators = models.ManyToManyField(User, related_name='moderators_tournament', verbose_name='Модераторы турнира')
-    max_participants = models.IntegerField(default=4, verbose_name='Максимальное количество участников')
+    max_participants = models.IntegerField(default=4, verbose_name='Максимальное количество участников', validators=[MinValueValidator(4), MaxValueValidator(128)],)
     max_team_size = models.IntegerField(blank=True, null=True, verbose_name='Максимальное количество участников в команде')
     min_team_size = models.IntegerField(blank=True, null=True, verbose_name='Минимальное количество участников в команде')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
