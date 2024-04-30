@@ -23,7 +23,7 @@ class TeamViewSet(viewsets.ModelViewSet):
     filterset_class = TeamFilter
     permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post']
-    queryset = Team.objects.select_related('sport')
+    queryset = Team.objects.select_related('sport').prefetch_related("members")
     # serializer_class = TeamSerializer
 
     def __init__(self, *args, **kwargs):
