@@ -51,7 +51,7 @@ class TeamSerializer(serializers.ModelSerializer):
         
         team = Team.objects.create(**validated_data)
 
-        logo = _decode_photo(logo_base64)
+        logo = None if not logo_base64 else _decode_photo(logo_base64)
 
         if not logo:
             sport = validated_data.get('sport')
@@ -69,3 +69,8 @@ class TeamSerializer(serializers.ModelSerializer):
         team.save()
         return team
 
+    def get_logo(self, obj):
+        try:
+            return obj.logo.url
+        except:
+            return ""
