@@ -780,6 +780,23 @@ class CreateTournamentBracket(APIView):
 
     @swagger_auto_schema(
         operation_description='Создать сетку для турнира на основе текущих участников',                
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'matches': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    description='Список матчей для обновления',
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'scheduled_start': openapi.Schema(type=openapi.TYPE_STRING, format='date-time', description='Запланированное время начала матча'),
+                            'participants': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER), description="id пользователей или команд"),                                            
+                        },
+                        required=['id']
+                    ),
+                )                
+            }
+        ),
         responses={
             "201": openapi.Response(        
                 description='',        
@@ -802,8 +819,10 @@ class CreateTournamentBracket(APIView):
     })
 
     def post(self, request, id):
-        try:            
-            tournament = Tournament.objects.get(id=id)
+        try:       
+            data = json.loads(request.body)
+            matches_data = data.get("matches", None)
+            tournament = Tournament.objects.get(id=id)            
 
             participants = list(Participant.objects.filter(tournament=tournament))
             
@@ -811,16 +830,16 @@ class CreateTournamentBracket(APIView):
                 create_round_robin_bracket_2step(tournament)
 
             elif tournament.bracket == 0:  # Single Elimination
-                create_single_elimination_bracket(tournament, [], participants)
+                create_single_elimination_bracket(tournament, matches_data, participants)
 
             elif tournament.bracket == 1:  # Double Elimination
-                create_double_elimination_bracket(tournament, [], participants)
+                create_double_elimination_bracket(tournament, matches_data, participants)
 
             elif tournament.bracket == 2:  # Round Robin
-                create_round_robin_bracket(tournament, [], participants)
+                create_round_robin_bracket(tournament, matches_data, participants)
             
             elif tournament.bracket == 3:  # Swiss or Leaderboard
-                create_swiss_bracket(tournament, [], participants)
+                create_swiss_bracket(tournament, matches_data, participants)
 
             elif tournament.bracket == 4:
                 create_leaderboard_bracket(tournament)
