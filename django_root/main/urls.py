@@ -5,7 +5,7 @@ from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchPa
 
 from main.views.city import CityRequest
 from main.views.sport import SportViewSet
-from main.views.tournament import AcceptTournament, AcceptTournamentRequest, AddTournamentParticipants, DeclineTournament, DeleteTournamentParticipants, GetTournamentsPrices, JoinTournament, LeaveTournament, RefuseTournamentRequest, SetTournamentModerators, TournamentViewSet, UpdateTournament, CreateTournamentBracket
+from main.views.tournament import EndTournamentStage, AcceptTournament, AcceptTournamentRequest, AddTournamentParticipants, DeclineTournament, DeleteTournamentParticipants, GetTournamentsPrices, JoinTournament, LeaveTournament, RefuseTournamentRequest, SetTournamentModerators, TournamentViewSet, UpdateTournament, CreateTournamentBracket
 from main.views.user import UserDetail
 
 from main.views.auth import Login, RestorePassword, UserExists
@@ -42,10 +42,11 @@ urlpatterns = [
     path('match-request/delete/', DeleteMatchParticipants.as_view(), name='delete_match_participants'),
     path('match-request/add/', AddMatchParticipants.as_view(), name='add_match_participants'),
 
-    path('tournaments/<int:id>/update-matches/', UpdateTournament.as_view(), name='update_tournament'),
     path('tournaments/<int:id>/create-bracket/', CreateTournamentBracket.as_view(), name='create_tournament_bracket'),
     path('tournaments/<int:id>/add-participants/', AddTournamentParticipants.as_view(), name='add_tournament_participants'),
     path('tournaments/<int:id>/set-moderators/', SetTournamentModerators.as_view(), name='set_tournament_moderators'),
+    path('tournaments/<int:id>/end-stage/', EndTournamentStage.as_view(), name='end_tournament_stage'),
+    path('tournaments/update-matches/', UpdateTournament.as_view(), name='update_tournament'),
     path('tournaments/join/', JoinTournament.as_view(), name='join_tournament'),
     path('tournaments/leave/', LeaveTournament.as_view(), name='leave_tournament'),
     path('tournaments/accept/', AcceptTournament.as_view(), name='accept_tournament'),

@@ -174,9 +174,8 @@ class UpdateTournament(APIView):
             ),            
     })
 
-    def patch(self, request, id):
+    def patch(self, request):
         try:
-            tournament = get_object_or_404(Tournament, id=id, owner=request.user)
             data = json.loads(request.body)
             matches_data = data.get("matches", [])
             results_data = data.get("results", [])
@@ -204,72 +203,24 @@ class UpdateTournament(APIView):
                 match.scheduled_start = match_data.get("scheduled_start", match.scheduled_start)
                 match.actual_start = match_data.get("actual_start", match.actual_start)
                 match.actual_end = match_data.get("actual_end", match.actual_end)
+                participant_1_score = match_data.get("participant_1_score", None)
+                participant_2_score = match_data.get("participant_2_score", None)   
+                                                         
+                winner = None
+                                                                                
+                if participant_1_score > participant_2_score:
+                    winner = match.participant1
+                elif participant_1_score < participant_2_score:
+                    winner = match.participant2                                         
+                     
+                match.winner = winner
+                match.participant1_score = participant_1_score
+                match.participant2_score = participant_2_score
+                match.status = 2
                 
-                if "participant_1_score" in match_data and "participant_2_score" in match_data:
-                    participant_1_score = match_data.get("participant_1_score")
-                    participant_2_score = match_data.get("participant_2_score")                                        
-
-                    if match.status == 2: # Если матч уже был завершен но нужно поменять результаты
-                        if (match.participant1_score < match.participant2_score) != (participant_1_score < participant_2_score): # Если результат матча изменился
-                            if(participant_1_score < participant_2_score):
-                                match.participant1.score -= tournament.win_points
-                                match.participant2.score += tournament.win_points
-                            elif(participant_1_score > participant_2_score):
-                                match.participant1.score += tournament.win_points
-                                match.participant2.score -= tournament.win_points
-                            else:
-                                if match.participant1_score < match.participant2_score:
-                                    match.participant2 -= tournament.win_points + tournament.draw_points
-                                    match.participant1 += tournament.draw_points
-                                elif match.participant1_score > match.participant2_score:
-                                    match.participant1 -= tournament.win_points + tournament.draw_points
-                                    match.participant2 += tournament.draw_points                                                         
-                    else:
-                        winner = None
-                        loser = None
-
-                        if participant_1_score > participant_2_score:
-                            winner = match.participant1
-                            loser = match.participant2
-                        elif participant_1_score < participant_2_score:
-                            winner = match.participant2
-                            loser = match.participant1                                          
-                                        
-                        if not winner and loser:
-                            match.participant1.score += tournament.draw_points
-                            match.participant2.score += tournament.draw_points
-                        else:
-                            winner.score += tournament.win_points                        
-
-                    match.participant1_score = participant_1_score
-                    match.participant2_score = participant_2_score
-                    match.winner = winner
-                    match.status = 2
-                    match.save()
-                    match.participant1.save()
-                    match.participant2.save()
-                    
-                if tournament.bracket == 0: # single
-                    if match.next_match:
-                        if not match.next_match.participant1:
-                            match.next_match.participant1 = winner
-                        elif not match.next_match.participant2:
-                            match.next_match.participant2 = winner
-                        match.next_match.save()
-                elif tournament.bracket == 1: # double
-                    if match.next_match:
-                        if not match.next_match.participant1:
-                            match.next_match.participant1 = winner
-                        elif not match.next_match.participant2:
-                            match.next_match.participant2 = winner
-                        match.next_match.save()
-
-                    if match.next_lose_match:
-                        if not match.next_lose_match.participant1:
-                            match.next_lose_match.participant1 = loser
-                        elif not match.next_lose_match.participant2:
-                            match.next_lose_match.participant2 = loser
-                        match.next_lose_match.save()                       
+                match.save()
+                match.participant1.save()
+                match.participant2.save()                                      
 
             return Response({'success': True, 'message': 'Турнир обновлен!'}, status=status.HTTP_200_OK)
 
@@ -280,23 +231,43 @@ class UpdateTournament(APIView):
 class EndTournamentStage(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        try:
-            data = json.loads(request.body)
+    @swagger_auto_schema(
+        operation_description='Завершить этап турнира',
+        responses={
+            "200": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Этап завершен!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
 
-            tournament_id = data["tournament"]
-            tournament = Tournament.objects.get(id=tournament_id)
+    def post(self, request, id):
+        try:
+            tournament = Tournament.objects.get(id=id)
             
-            if tournament.owner != request.user or not tournament.moderators.exists(request.user):
+            if tournament.owner != request.user and not tournament.moderators.contains(request.user):
                 return Response({'success': False, 'message': "Только организатор или модераторы могут завершить этап!"}, status=status.HTTP_400_BAD_REQUEST) 
 
             active_stage = tournament.get_active_stage()
+            matches = Match.objects.filter(stage=active_stage)
             
             if tournament.bracket in [2, 3, 4] and tournament.stages.count() != tournament.rounds_count: # swiss
                 # Проверяем, завершены ли все матчи активного этапа
-                mathces = Match.objects.filter(stage=active_stage)
                 stages_count = TournamentStage.objects.filter(tournament=tournament).count() 
-                if all(match.status == 2 for match in mathces):                        
+                if all(match.status == 2 for match in matches):                        
                     if tournament.bracket in [3, 4] and stages_count < tournament.rounds_count:
                         tournament.active_stage_position += 1
                         new_stage = TournamentStage.objects.create(
@@ -309,12 +280,53 @@ class EndTournamentStage(APIView):
                         assign_final_positions(tournament)
             
             elif tournament.has_next_stage():
+                for match in matches:
+                    loser = match.participant2 if match.participant1 == match.winner else match.participant1
+                    if tournament.tournament_type == 1 and active_stage.name.contains("Групповой"):
+                        if not match.winner:
+                            match.participant1.score += tournament.group_stage_draw_points
+                            match.participant2.score += tournament.group_stage_draw_points
+                        else:
+                            match.winner.score += tournament.group_stage_win_points
+                    else:
+                        if not match.winner:
+                            match.participant1.score += tournament.draw_points
+                            match.participant2.score += tournament.draw_points
+                        else:
+                            match.winner.score += tournament.win_points
+
+                    if tournament.bracket == 0: # single
+                        if match.next_match:
+                            if not match.next_match.participant1:
+                                match.next_match.participant1 = match.winner
+                            elif not match.next_match.participant2:
+                                match.next_match.participant2 = match.winner
+                            match.next_match.save()
+                    elif tournament.bracket == 1: # double
+                        if match.next_match:
+                            if not match.next_match.participant1:
+                                match.next_match.participant1 = match.winner
+                            elif not match.next_match.participant2:
+                                match.next_match.participant2 = match.winner
+                            match.next_match.save()
+                        
+                        if match.next_lose_match:
+                            if not match.next_lose_match.participant1:
+                                match.next_lose_match.participant1 = loser
+                            elif not match.next_lose_match.participant2:
+                                match.next_lose_match.participant2 = loser
+                            match.next_lose_match.save()
+                    
+                    match.save()            
+                
                 tournament.active_stage_position += 1
+
             else:
                 if tournament.bracket in [0, 1]: # Single / Double elimination                                         
                     assign_final_positions_elimination(tournament, active_stage)                    
 
             tournament.save()
+            return Response({'success': True, 'message': "Этап турнира завершен!"}, status=status.HTTP_200_OK) 
         except Exception as error:
             return Response({'success': False, 'message': str(error)}, status=status.HTTP_400_BAD_REQUEST) 
 

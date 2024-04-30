@@ -192,7 +192,7 @@ def create_round_robin_bracket_2step(tournament):
         matches_count = tournament.matches_count if tournament.matches_count else 1
         
         for _ in range(matches_count):
-            stage_name = f"Этап {position}"
+            stage_name = f"Групповой Этап {position}"
             stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=position)                    
             for i in range(len(participants)):
                 for j in range(i + 1, len(participants)):
