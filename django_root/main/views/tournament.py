@@ -20,10 +20,9 @@ from rest_framework.views import APIView
 
 from django.core.mail import send_mail
 
-from main.serializers.tournament import TournamentListSerializer, TournamentSerializer
+from main.serializers.tournament import TournamentListSerializer, TournamentSerializer, TournamentStageSerializer
 
 import json
-import random
 from django.db.models import Q
 
 from django.shortcuts import get_object_or_404
@@ -31,8 +30,9 @@ from django.shortcuts import get_object_or_404
 from main.services.img_functions import _decode_photo
 
 from django.db.models import Min, Max
-from rest_framework import serializers
 from django.db.models import Count
+
+from main.services.tournament import create_double_elimination_bracket, create_leaderboard_bracket, create_new_swiss_round, create_round_robin_bracket, create_round_robin_bracket_2step, create_single_elimination_bracket, create_swiss_bracket
 
 from main.services.tournament import assign_final_positions, assign_final_positions_elimination
 
@@ -316,7 +316,7 @@ class EndTournamentStage(APIView):
 
             tournament.save()
         except Exception as error:
-            return Response({'success': False, 'message': error}, status=status.HTTP_400_BAD_REQUEST) 
+            return Response({'success': False, 'message': str(error)}, status=status.HTTP_400_BAD_REQUEST) 
 
     
     
@@ -426,7 +426,7 @@ class JoinTournament(APIView):
             # TODO
             # сделать уведомление создателя турнира, что на него откликнулись
         except Exception as error:
-            return Response({'success': False, 'message': error}, status=status.HTTP_401_UNAUTHORIZED) 
+            return Response({'success': False, 'message': str(error)}, status=status.HTTP_401_UNAUTHORIZED) 
 
 
 class LeaveTournament(APIView):
@@ -481,7 +481,7 @@ class LeaveTournament(APIView):
                     participant.delete()                                    
                 return Response({'success': True, 'message': 'Вы покинули турнир!'}, status=status.HTTP_200_OK)
         except Exception as error:
-            return Response({'success': False, 'message': f'Турнира с таким id не найдено! {error}'}, status=status.HTTP_401_UNAUTHORIZED) 
+            return Response({'success': False, 'message': f'Турнира с таким id не найдено! {str(error)}'}, status=status.HTTP_401_UNAUTHORIZED) 
 
 
 class AcceptTournamentRequest(APIView):
@@ -540,7 +540,7 @@ class AcceptTournamentRequest(APIView):
                     tournament.users_requests.remove(user)
                     new_participant = Participant.objects.create(user=user, tournament=tournament)
                     tournament.participants.add(new_participant)
-                except Exception as error:
+                except:
                     return Response({'success': False, 'message': 'Пользователь с переданным user id не найден!'}, status=status.HTTP_400_BAD_REQUEST)             
             elif team_id:
                 try:
@@ -706,14 +706,12 @@ class AddTournamentParticipants(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description='Добавить участников на турнир',        
+        operation_description='Добавить участников или команды на турнир',        
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['tournament'],
-            properties={
-                'tournament': openapi.Schema(type=openapi.TYPE_INTEGER, description="id матча"),                
-                'users': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER), description="id пользователей"),                
-                'teams': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER), description="id команд"),                
+            required=['participants'],
+            properties={                               
+                'participants': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER), description="id пользователей или команд"),                
             },
         ),
         responses={
@@ -737,30 +735,16 @@ class AddTournamentParticipants(APIView):
             ),            
     })
 
-    def post(self, request):
+    def post(self, request, id):
         try:
             data = json.loads(request.body)
             
-            tournament_id = data["tournament"]
-            users_id = data.get("users", [])
-            teams_id = data.get("teams", [])
+            participants_id = data.get("participants", [])
 
-            tournament = Tournament.objects.get(id=tournament_id)
+            tournament = Tournament.objects.get(id=id)
 
-            if users_id:
-                for user_id in users_id:
-                    try:
-                        user = User.objects.get(id=user_id)                    
-                        if tournament.participants.filter(user=user).exists():
-                            return Response({'success': False, 'message': 'Переданный пользователь уже учавствует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
-                        if tournament.users_requests.contains(user):
-                            tournament.users_requests.remove(user)
-                        new_participant = Participant.objects.create(user=user, tournament=tournament)
-                        tournament.participants.add(new_participant)
-                    except:
-                        return Response({'success': False, 'message': 'Пользователя с переданным user id не существует!'}, status=status.HTTP_400_BAD_REQUEST)                     
-            elif teams_id:
-                for team_id in teams_id:
+            if tournament.is_team_tournament:
+                for team_id in participants_id:
                     try:
                         team = Team.objects.get(id=team_id)
                         if tournament.participants.filter(team=team).exists():
@@ -770,12 +754,84 @@ class AddTournamentParticipants(APIView):
                         new_participant = Participant.objects.create(team=team, tournament=tournament)
                         tournament.participants.add(new_participant)
                     except:
-                        return Response({'success': False, 'message': 'Команды с переданным team id не существует!'}, status=status.HTTP_400_BAD_REQUEST)             
-
+                        return Response({'success': False, 'message': 'Команды с переданным team id не существует!'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                for user_id in participants_id:
+                    try:
+                        user = User.objects.get(id=user_id)                    
+                        if tournament.participants.filter(user=user).exists():
+                            return Response({'success': False, 'message': 'Переданный пользователь уже учавствует в этом матче!'}, status=status.HTTP_400_BAD_REQUEST) 
+                        if tournament.users_requests.contains(user):
+                            tournament.users_requests.remove(user)
+                        new_participant = Participant.objects.create(user=user, tournament=tournament)
+                        tournament.participants.add(new_participant)
+                    except:
+                        return Response({'success': False, 'message': 'Пользователя с переданным user id не существует!'}, status=status.HTTP_400_BAD_REQUEST)            
+            
             return Response({'success': True, 'message': 'Пользователь добавлен на матч!'}, status=200)
+       
         except:
             return Response({'success': False, 'message': 'Турнира или пользователя с таким id не найдено!'}, status=status.HTTP_401_UNAUTHORIZED) 
-        
+
+# TODO
+# Возможно стоит добавить сюда поле matches_data в котором будет инфа про то кто с кем и когда должен играть
+class CreateTournamentBracket(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description='Создать сетку для турнира на основе текущих участников',                
+        responses={
+            "201": openapi.Response(        
+                description='',        
+                examples={
+                    "application/json": {
+                        "success": True,  
+                        'message': 'Вы успешно создали сетку турнира!'                      
+                    },                    
+                }
+            ),
+            "401": openapi.Response(
+                description='',                
+                examples={
+                    "application/json": {
+                        "success": False,  
+                        'message': 'Не авторизован!'                      
+                    },                    
+                }
+            ),            
+    })
+
+    def post(self, request, id):
+        try:            
+            tournament = Tournament.objects.get(id=id)
+
+            participants = list(Participant.objects.filter(tournament=tournament))
+            
+            if tournament.tournament_type == 1:  # Двуступенчатый турнир
+                create_round_robin_bracket_2step(tournament)
+
+            elif tournament.bracket == 0:  # Single Elimination
+                create_single_elimination_bracket(tournament, [], participants)
+
+            elif tournament.bracket == 1:  # Double Elimination
+                create_double_elimination_bracket(tournament, [], participants)
+
+            elif tournament.bracket == 2:  # Round Robin
+                create_round_robin_bracket(tournament, [], participants)
+            
+            elif tournament.bracket == 3:  # Swiss or Leaderboard
+                create_swiss_bracket(tournament, [], participants)
+
+            elif tournament.bracket == 4:
+                create_leaderboard_bracket(tournament)
+
+            stages = TournamentStage.objects.filter(tournament=tournament).order_by("position")
+            stages_serializer = TournamentStageSerializer(stages, many=True)
+
+            return Response({'success': True, 'bracket_stages': stages_serializer.data}, status=status.HTTP_201_CREATED) 
+        except Exception as error:
+            return Response({'success': False, 'message': str(error)}, status=status.HTTP_401_UNAUTHORIZED) 
+
 
 class SetTournamentModerators(APIView):
     permission_classes = [IsAuthenticated]
@@ -784,9 +840,8 @@ class SetTournamentModerators(APIView):
         operation_description='Изменить модераторов турнира. Список модераторов заменяется на переданный',        
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=['tournament'],
+            required=['users'],
             properties={
-                'tournament': openapi.Schema(type=openapi.TYPE_INTEGER, description="id турнирв"),                
                 'users': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER), description="id пользователей"),                
             },
         ),
@@ -811,14 +866,13 @@ class SetTournamentModerators(APIView):
             ),            
     })
 
-    def post(self, request):
+    def post(self, request, id):
         try:
             data = json.loads(request.body)
             
-            tournament_id = data["tournament"]
             users_id = data.get("users", [])
 
-            tournament = Tournament.objects.get(id=tournament_id)
+            tournament = Tournament.objects.get(id=id)
 
             if users_id:
                 tournament.moderators.clear()

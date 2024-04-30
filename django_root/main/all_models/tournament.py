@@ -127,8 +127,8 @@ class Participant(models.Model):
     score = models.FloatField(default=0.0, verbose_name="Общий счет")
     
     class Meta:
-        verbose_name = 'Участник матча'
-        verbose_name_plural = 'Участники матчей'
+        verbose_name = 'Участник турнира'
+        verbose_name_plural = 'Участники турнира'
 
     def __str__(self):
         if self.user:
@@ -194,4 +194,4 @@ class TournamentPhoto(models.Model):
         verbose_name_plural = 'Фото турниров'
 
     def __str__(self):
-        return f"Фото Турнира: {self.match}"
+        return f"Фото Турнира: {self.tournament}"

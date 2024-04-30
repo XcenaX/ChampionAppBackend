@@ -87,10 +87,6 @@ def create_double_elimination_bracket(tournament, matches_data, participants):
     num_rounds_lower = num_rounds_upper - 1
 
     num_matches_in_round_one = num_participants // 2
-    
-    is_players_are_users = False
-    if participants[0].user:
-        is_players_are_users = True
 
     # Списки для хранения матчей в верхней и нижней сетке
     upper_matches = [[] for _ in range(num_rounds_upper)]
@@ -115,12 +111,12 @@ def create_double_elimination_bracket(tournament, matches_data, participants):
                 participant2 = None
 
                 if participants_ids:
-                    if is_players_are_users:
-                        participant1 = next((p for p in participants if p.user.id == participants_ids[0]), None)
-                        participant2 = next((p for p in participants if p.user.id == participants_ids[1]), None)
-                    else:
+                    if tournament.is_team_tournament:                        
                         participant1 = next((p for p in participants if p.team.id == participants_ids[0]), None)
                         participant2 = next((p for p in participants if p.team.id == participants_ids[1]), None)
+                    else:
+                        participant1 = next((p for p in participants if p.user.id == participants_ids[0]), None)
+                        participant2 = next((p for p in participants if p.user.id == participants_ids[1]), None)
 
                     if participant1 in participants:
                         participants.remove(participant1)

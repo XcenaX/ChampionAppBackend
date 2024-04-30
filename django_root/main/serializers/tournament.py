@@ -169,7 +169,6 @@ class TournamentSerializer(serializers.ModelSerializer):
     photos_base64 = serializers.ListField(
         child=serializers.CharField(), write_only=True, required=False
     )
-    teams = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     players = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     stages = TournamentStageSerializer(many=True, read_only=True)
 
@@ -184,7 +183,7 @@ class TournamentSerializer(serializers.ModelSerializer):
                     'win_points', 'draw_points', 'rounds_count', 'mathces_count', 'BO_number', 'group_stage_BO_number',
                     'final_stage_advance_count', 'participants_in_group', 'check_score_difference_on_draw',
                     'requests', 'prize_pool', 'first_place_prize', 'second_place_prize', 'third_place_prize',
-                    'city', 'rules', 'tournament_type', 'bracket', 'teams', 'players', 'stages']                  
+                    'city', 'rules', 'tournament_type', 'bracket', 'players', 'stages']                  
 
     def __init__(self, *args, **kwargs):
         super(TournamentSerializer, self).__init__(*args, **kwargs)
@@ -197,14 +196,10 @@ class TournamentSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        matches_data = validated_data.pop('matches', [])
         players = validated_data.pop('players', [])
-        teams = validated_data.pop('teams', [])
         photos_base64 = validated_data.pop('photos_base64', [])
         
         tournament = Tournament.objects.create(**validated_data)
-
-        participants = list(Participant.objects.filter(tournament=tournament))
 
         photos = []
         for photo_base64 in photos_base64:
@@ -217,43 +212,22 @@ class TournamentSerializer(serializers.ModelSerializer):
         else:
             TournamentPhoto.objects.bulk_create(photos)
 
-        for user_id in players:
-            try:
-                user = User.objects.get(id=user_id)
-                Participant.objects.create(user=user, tournament=tournament)
-            except:
-                pass
-            
-        for team_id in teams:
-            try:
-                team = Team.objects.get(id=team_id)
-                Participant.objects.create(team=team, tournament=tournament)
-            except:
-                pass 
-        
-        if not teams and not players: # Если начальные участники не переданы сетку не создаем
-            return tournament
+        if tournament.is_team_tournament:
+            for team_id in players:
+                try:
+                    team = Team.objects.get(id=team_id)
+                    Participant.objects.create(team=team, tournament=tournament)
+                except:
+                    pass 
+        else:
+            for user_id in players:
+                try:
+                    user = User.objects.get(id=user_id)
+                    Participant.objects.create(user=user, tournament=tournament)
+                except:
+                    pass
 
-        if tournament.tournament_type == 1:  # Двуступенчатый турнир
-            create_round_robin_bracket_2step(tournament)
-
-        elif tournament.bracket == 0:  # Single Elimination
-            create_single_elimination_bracket(tournament, matches_data, participants)
-
-        elif tournament.bracket == 1:  # Double Elimination
-            create_double_elimination_bracket(tournament, matches_data, participants)
-
-        elif tournament.bracket == 2:  # Round Robin
-            create_round_robin_bracket(tournament, matches_data, participants)
-        
-        elif tournament.bracket == 3:  # Swiss or Leaderboard
-            create_swiss_bracket(tournament, matches_data, participants)
-
-        elif tournament.bracket == 4:
-            create_leaderboard_bracket(tournament)
-
-        tournament.save()
-        return tournament
+        return tournament   
 
     def update(self, instance, validated_data):
         photo_base64 = validated_data.pop('photo_base64', None)
