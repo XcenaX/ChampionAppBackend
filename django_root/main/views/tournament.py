@@ -1,3 +1,4 @@
+from turtle import position
 from main.all_models.tournament import Match, Participant, StageResult, Tournament, Team, TournamentStage
 
 from champion_backend.settings import EMAIL_HOST_USER
@@ -32,7 +33,7 @@ from main.services.img_functions import _decode_photo
 from django.db.models import Min, Max
 from django.db.models import Count
 
-from main.services.tournament import create_double_elimination_bracket, create_leaderboard_bracket, create_new_swiss_round, create_round_robin_bracket, create_round_robin_bracket_2step, create_single_elimination_bracket, create_swiss_bracket
+from main.services.tournament import assign_final_positions_leaderboard, create_double_elimination_bracket, create_leaderboard_bracket, create_new_swiss_round, create_round_robin_bracket, create_round_robin_bracket_2step, create_single_elimination_bracket, create_swiss_bracket
 
 from main.services.tournament import assign_final_positions, assign_final_positions_double_elimination, assign_final_positions_single_elimination
 
@@ -268,17 +269,26 @@ class EndTournamentStage(APIView):
             if not all(match.status == 2 for match in matches):  # Проверяем, завершены ли все матчи
                 return Response({'success': False, 'message': "Не все матчи этапа завершены!"}, status=status.HTTP_400_BAD_REQUEST)
 
-            if tournament.bracket in [3, 4] and tournament.stages.count() < tournament.rounds_count:
+            if tournament.bracket == 3 and tournament.stages.count() < tournament.rounds_count:
                 # Swiss or other multi-round bracket logic
                 if all(match.status == 2 for match in matches):
-                    if tournament.stages.count() < tournament.rounds_count:
+                    stages_count = TournamentStage.objects.filter(tournament=tournament).count()
+                    if stages_count < tournament.rounds_count:
                         new_stage = TournamentStage.objects.create(
                             name=f"Этап {tournament.stages.count() + 1}",
-                            tournament=tournament
+                            tournament=tournament,
+                            position=stages_count+1
                         )
                         create_new_swiss_round(new_stage, tournament)
+                        tournament.active_stage_position += 1
                     else:
                         assign_final_positions(tournament)
+            elif tournament.bracket == 4:
+                if tournament.active_stage_position == tournament.rounds_count:
+                    assign_final_positions_leaderboard(tournament)
+                else:
+                    tournament.active_stage_position += 1
+
             elif not tournament.has_next_stage():
                 if tournament.bracket == 0:  # Single elimination
                     assign_final_positions_single_elimination(tournament)
@@ -836,7 +846,7 @@ class CreateTournamentBracket(APIView):
                 create_double_elimination_bracket(tournament, matches_data, participants)
 
             elif tournament.bracket == 2:  # Round Robin
-                create_round_robin_bracket(tournament, matches_data, participants)
+                create_round_robin_bracket(tournament, participants)
             
             elif tournament.bracket == 3:  # Swiss or Leaderboard
                 create_swiss_bracket(tournament, matches_data, participants)

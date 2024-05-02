@@ -49,7 +49,7 @@ class TournamentsTests(APITestCase):
         self.place = 'Футбольное поле'
         self.tournament = None        
 
-    def test_create_tournament(self, bracket=0, auto_accept=True):
+    def test_create_tournament(self, bracket=0, auto_accept=True, tournament_type=0):
         token = self.login_user(self.users[0].email)
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
         
@@ -66,11 +66,12 @@ class TournamentsTests(APITestCase):
             'city': "Астана",
             'address': "ojfosjfosf",
             'bracket': bracket,
-            "tournament_type": 0,
+            "tournament_type": tournament_type,
             'prize_pool': 100000,
             "win_points": 3,
             "draw_points": 1,
             "rounds_count": 3,
+            "mathces_count": 3,
             "group_stage_win_points": 3,
             "group_stage_draw_points": 1,
             "group_stage_rounds_count": 3,
@@ -139,8 +140,8 @@ class TournamentsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(self.tournament.users_requests.filter(id=self.users[1].id).exists())
 
-    def test_add_participants(self, auto_accept=True, bracket=0):
-        self.test_create_tournament(bracket=bracket, auto_accept=auto_accept)
+    def test_add_participants(self, auto_accept=True, bracket=0, tournament_type=0):
+        self.test_create_tournament(bracket=bracket, auto_accept=auto_accept, tournament_type=tournament_type)
         
         token = self.login_user(self.users[0].email)
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
@@ -157,8 +158,8 @@ class TournamentsTests(APITestCase):
         else:
             self.assertTrue(self.tournament.users_requests.count() == participants_count)
 
-    def test_create_bracket(self, auto_accept=True, bracket=0):
-        self.test_add_participants(auto_accept, bracket=bracket)
+    def test_create_bracket(self, auto_accept=True, bracket=0, tournament_type=0):
+        self.test_add_participants(auto_accept, bracket=bracket, tournament_type=tournament_type)
         
         token = self.login_user(self.users[0].email)
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + token)
@@ -198,10 +199,6 @@ class TournamentsTests(APITestCase):
         }
         response = self.client.patch(url, data, format='json')
 
-        if response.status_code == status.HTTP_400_BAD_REQUEST:
-            print(response.content)
-
-
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def end_stage(self):
@@ -215,6 +212,7 @@ class TournamentsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_single_elimination(self):
+        print("\nTest single elimination...")
         current_bracket = 0
         self.test_create_bracket(auto_accept=True, bracket=current_bracket)
         stages_count = TournamentStage.objects.filter(tournament=self.tournament).count()
@@ -244,17 +242,18 @@ class TournamentsTests(APITestCase):
         places = self.tournament.get_places()
         predicted_places = ["test@mail.ru", "test5@mail.ru", "test3@mail.ru", "test7@mail.ru", "test2@mail.ru", "test4@mail.ru", "test6@mail.ru", "test8@mail.ru",]
         places_count = len(places)        
-        print([(participant.place, participant.user.email) for participant in places])
+        # print([(participant.place, participant.user.email) for participant in places])
         for i in range(places_count):
             self.assertEqual(predicted_places[i], places[i].user.email)
 
     def test_double_elimination(self):
+        print("\nTest double elimination...")
         current_bracket = 1
         self.test_create_bracket(auto_accept=True, bracket=current_bracket)
-        print_next_matches_for_tournament(self.tournament.id)
+        # print_next_matches_for_tournament(self.tournament.id)
         
         stages_count = TournamentStage.objects.filter(tournament=self.tournament).count()
-        print([(stage.name, stage.position) for stage in TournamentStage.objects.filter(tournament=self.tournament)])
+        # print([(stage.name, stage.position) for stage in TournamentStage.objects.filter(tournament=self.tournament)])
         count = 0
         has_next_stage = True
         while(has_next_stage):
@@ -274,14 +273,142 @@ class TournamentsTests(APITestCase):
             self.end_stage()
             self.tournament = Tournament.objects.get(id=self.tournament.id)
 
-            print_tournament_bracket(self.tournament.id)
+            # print_tournament_bracket(self.tournament.id)
             count += 1
             if count == stages_count+1:
                 raise Exception("Something wrong with ending stages in Double elimination")
         
         places = self.tournament.get_places()
+        predicted_places = ["test@mail.ru", "test5@mail.ru", "test2@mail.ru", "test6@mail.ru", "test3@mail.ru", "test7@mail.ru", "test4@mail.ru", "test8@mail.ru",]
+        places_count = len(places)        
+        # print([(participant.place, participant.user.email) for participant in places])
+        for i in range(places_count):
+            self.assertEqual(predicted_places[i], places[i].user.email)
+
+    def test_round_robin(self):
+        print("\nTest Round Robin...")
+        current_bracket = 2
+        self.test_create_bracket(auto_accept=True, bracket=current_bracket)
+        stages_count = TournamentStage.objects.filter(tournament=self.tournament).count()
+        count = 0
+        has_next_stage = True
+        while(has_next_stage):
+            has_next_stage = self.tournament.has_next_stage()
+            matches_data = []
+            stage = self.tournament.get_active_stage()
+            matches = Match.objects.filter(stage=stage)
+            print(self.tournament.active_stage_position)
+            for match in matches:
+                matches_data.append({
+                    'id': match.id,
+                    'participant_1_score': 10,
+                    'participant_2_score': 1
+                })
+
+            self.update_matches(matches_data=matches_data)
+            self.end_stage()
+            self.tournament = Tournament.objects.get(id=self.tournament.id)            
+            
+            count += 1
+            if count == stages_count+1:
+                raise Exception("Something wrong with ending stages in Round Robin")
+        
+        places = self.tournament.get_places()
+        predicted_places = ["test@mail.ru", "test2@mail.ru", "test3@mail.ru", "test4@mail.ru", "test5@mail.ru", "test6@mail.ru", "test7@mail.ru", "test8@mail.ru",]
+        places_count = len(places)        
+        # print([(participant.place, participant.user.email) for participant in places])
+        for i in range(places_count):
+            self.assertEqual(predicted_places[i], places[i].user.email)
+
+    def test_swiss(self):
+        print("\nTest Swiss...")
+        current_bracket = 3
+        self.test_create_bracket(auto_accept=True, bracket=current_bracket)
+        
+        has_next_stage = True
+        while(has_next_stage):
+            has_next_stage = self.tournament.active_stage_position < self.tournament.rounds_count                       
+            matches_data = []
+            stage = self.tournament.get_active_stage()
+            matches = Match.objects.filter(stage=stage)
+            print(self.tournament.active_stage_position)
+            
+            for match in matches:
+                matches_data.append({
+                    'id': match.id,
+                    'participant_1_score': 10,
+                    'participant_2_score': 1
+                })
+
+            self.update_matches(matches_data=matches_data)
+            self.end_stage()
+            self.tournament = Tournament.objects.get(id=self.tournament.id) 
+        
+        places = self.tournament.get_places()
+        predicted_places = ["test@mail.ru", "test2@mail.ru", "test3@mail.ru", "test4@mail.ru", "test5@mail.ru", "test6@mail.ru", "test7@mail.ru", "test8@mail.ru",]
+        places_count = len(places)        
+        # print([(participant.place, participant.user.email) for participant in places])
+        for i in range(places_count):
+            self.assertEqual(predicted_places[i], places[i].user.email)
+
+    def test_leaderboard(self):
+        print("\nTest Leaderboard...")
+        current_bracket = 4
+        self.test_create_bracket(auto_accept=True, bracket=current_bracket)
+        
+        has_next_stage = True
+        while(has_next_stage):
+            has_next_stage = self.tournament.active_stage_position < self.tournament.rounds_count                       
+            results = []
+            stage = self.tournament.get_active_stage()
+            matches = Match.objects.filter(stage=stage)
+            print(self.tournament.active_stage_position)
+            i = 0
+            for match in matches:
+                results.append({
+                    'participant_id': self.users[i].id,
+                    'score': 8 - i
+                })
+                i += 1
+
+            self.update_matches(results=results)
+            self.end_stage()
+            self.tournament = Tournament.objects.get(id=self.tournament.id) 
+        
+        places = self.tournament.get_places()
+        predicted_places = ["test@mail.ru", "test2@mail.ru", "test3@mail.ru", "test4@mail.ru", "test5@mail.ru", "test6@mail.ru", "test7@mail.ru", "test8@mail.ru",]
+        places_count = len(places)        
+        # print([(participant.place, participant.user.email) for participant in places])
+        for i in range(places_count):
+            self.assertEqual(predicted_places[i], places[i].user.email)
+
+    # TODO доделать тесты для сеток Двуступенчатого турнира
+    def _test_grand_tournament_single(self):
+        print("\nTest Grand Tournament with Single elimination...")
+        current_bracket = 0
+        self.test_create_bracket(auto_accept=True, bracket=current_bracket, tournament_type=1)
+        
+        has_next_stage = True
+        while(has_next_stage):
+            has_next_stage = self.tournament.has_next_stage()
+            matches_data = []
+            stage = self.tournament.get_active_stage()
+            matches = Match.objects.filter(stage=stage)
+            print(self.tournament.active_stage_position)
+            for match in matches:
+                matches_data.append({
+                    'id': match.id,
+                    'participant_1_score': 10,
+                    'participant_2_score': 1
+                })
+
+            self.update_matches(matches_data=matches_data)
+            self.end_stage()
+            self.tournament = Tournament.objects.get(id=self.tournament.id)            
+        
+        places = self.tournament.get_places()
         predicted_places = ["test@mail.ru", "test5@mail.ru", "test3@mail.ru", "test7@mail.ru", "test2@mail.ru", "test4@mail.ru", "test6@mail.ru", "test8@mail.ru",]
         places_count = len(places)        
-        print([(participant.place, participant.user.email) for participant in places])
+        # print([(participant.place, participant.user.email) for participant in places])
         for i in range(places_count):
             self.assertEqual(predicted_places[i], places[i].user.email)
