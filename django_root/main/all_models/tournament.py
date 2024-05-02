@@ -38,6 +38,7 @@ class Tournament(models.Model):
     active_stage_position = models.IntegerField(default=1, verbose_name='Позиция активного этапа')
     
     BO_number = models.IntegerField(default=1, verbose_name='Количество встреч в матче', validators=[MinValueValidator(1), MaxValueValidator(5)],)
+    final_BO_number = models.IntegerField(default=1, verbose_name='Количество встреч в финале', validators=[MinValueValidator(1), MaxValueValidator(5)],)
     group_stage_BO_number = models.IntegerField(default=1, verbose_name='Количество встреч в матче (Групповой этап)', validators=[MinValueValidator(1), MaxValueValidator(5)],)
 
     # Swiss
@@ -67,10 +68,14 @@ class Tournament(models.Model):
         
     def has_next_stage(self):
         try:
-            TournamentStage.objects.get(tournament=self, position=self.active_stage_position+1)
+            TournamentStage.objects.get(tournament=self, position=(self.active_stage_position+1))
             return True
         except:
-            return False            
+            return False     
+
+    def get_places(self):
+        """Возвращает список участников и их мест на турнире"""
+        return Participant.objects.filter(tournament=self).order_by("place")
         
     def have_played(self, participant1, participant2):
         return Match.objects.filter(
