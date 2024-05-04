@@ -3,8 +3,10 @@ from turtle import position
 from main.all_models.tournament import StageResult, TournamentStage, Match, Participant, Tournament
 import random
 
-def create_single_elimination_bracket(tournament, matches_data, participants):
+def create_single_elimination_bracket(tournament, matches_data, participants:list):
     num_participants = tournament.max_participants
+    if tournament.tournament_type == 1:
+        num_participants = len(participants)
     if num_participants == 0:
         num_rounds = 0
     else:
@@ -14,9 +16,11 @@ def create_single_elimination_bracket(tournament, matches_data, participants):
     num_matches_in_round_one = num_participants // 2
     
     stage_position = 1
+    stage_position_offset = tournament.get_stage_offset()
+
     for round_number in range(1, num_rounds + 1):
         stage_name = get_stage_name(round_number, num_rounds)
-        stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=stage_position)
+        stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=stage_position + stage_position_offset)
         stage_position += 1
 
         new_matches = []
@@ -78,30 +82,44 @@ def get_stage_name(round_number, num_rounds):
     else:
         return f"Этап {round_number}"
 
-def create_double_elimination_bracket(tournament, matches_data, participants):
-    num_participants = len(participants)
+def create_double_elimination_bracket(tournament, matches_data, participants:list):
+    num_participants = tournament.max_participants
+    if tournament.tournament_type == 1:
+        num_participants = len(participants)
     num_rounds_upper = math.ceil(math.log2(num_participants))
     num_rounds_lower = 2 * (num_rounds_upper) - 2
+    
+    stage_position_offset = tournament.get_stage_offset() # Для Двуступенчатых турниров
+    
     # Создаем этапы верхней и нижней сетки
     upper_stages = [
         TournamentStage.objects.create(
-            name=f"Верхняя сетка - Этап {i + 1}", tournament=tournament, position=(i * 2 + 1)
+            name=f"Верхняя сетка - Этап {i + 1}", tournament=tournament, position=(i * 2 + 1) + stage_position_offset
         ) for i in range(num_rounds_upper)
     ]
 
     lower_stages = [
         TournamentStage.objects.create(
-            name=f"Нижняя сетка - Этап {i + 1}", tournament=tournament, position=(i * 2 + 2)
+            name=f"Нижняя сетка - Этап {i + 1}", tournament=tournament, position=(i * 2 + 2) + stage_position_offset
         ) for i in range(num_rounds_lower)
     ]
 
-    lower_stages[-1].position -= 1
-    lower_stages[-1].save()
+    # Фиксим позиции этапов если надо
+    previous_stage = None
+    for stage in TournamentStage.objects.filter(tournament=tournament).order_by("position"):
+        if previous_stage:
+            if stage.position - previous_stage.position != 1:
+                stage.position = previous_stage.position + 1
+                stage.save()
+        previous_stage = stage 
+    
+    # lower_stages[-1].position -= 1
+    # lower_stages[-1].save()
 
     # Создаем матчи для первого раунда верхней сетки
     for i in range(0, num_participants, 2):
         participants_ids = matches_data[i // 2]['participants'] if i // 2 < len(matches_data) else None
-
+        scheduled_start = matches_data[i // 2].get('scheduled_start', None) if i // 2 < len(matches_data) else None
         participant1 = None
         participant2 = None
 
@@ -114,7 +132,7 @@ def create_double_elimination_bracket(tournament, matches_data, participants):
 
         Match.objects.create(
             stage=upper_stages[0],
-            scheduled_start=matches_data[i // 2].get('scheduled_start', None),
+            scheduled_start=scheduled_start,
             participant1=participant1,
             participant2=participant2
         )
@@ -160,8 +178,8 @@ def create_double_elimination_bracket(tournament, matches_data, participants):
             upper_stage_losers_matches = Match.objects.filter(stage=upper_stages[stage_index // 2 + 1])
             previous_lower_stage_matches = Match.objects.filter(stage=lower_stages[stage_index - 1])
             previous_lower_stage_matches_len = len(previous_lower_stage_matches)
-            i = 0
-            for match in upper_stage_losers_matches:
+            
+            for i, match in enumerate(upper_stage_losers_matches, start=0):
                 new_match = Match.objects.create(stage=current_stage)
                 match.next_lose_match = new_match
                 match.save()
@@ -212,14 +230,14 @@ def create_final_match(upper_final_stage, lower_final_stage, tournament):
         last_lower_match.next_match = final_match
         last_lower_match.save()
 
-
-
 def create_round_robin_bracket(tournament, participants):
     matches_count = tournament.mathces_count if tournament.mathces_count else 1
     
-    for position in range(matches_count):
-        stage_name = f"Этап {position+1}"
-        stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=position+1)                    
+    stage_position_offset = tournament.get_stage_offset()
+
+    for position in range(1, matches_count+1):
+        stage_name = f"Этап {position}"
+        stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=position + stage_position_offset)                    
         for i in range(len(participants)):
             for j in range(i + 1, len(participants)):
                 Match.objects.create(
@@ -229,14 +247,16 @@ def create_round_robin_bracket(tournament, participants):
                 )
 
 def create_round_robin_bracket_2step(tournament):
+    """Участники разделяются на N групп. В каждой группе проходит round robin этап. """
     groups_count = tournament.max_participants // tournament.participants_in_group
     splitted_participants = tournament.get_participants_for_groups(groups_count)
     position = 1
-    for participants in range(splitted_participants):
-        matches_count = tournament.matches_count if tournament.matches_count else 1
+    group_number = 1
+    for participants in splitted_participants:
+        rounds_count = tournament.rounds_count if tournament.rounds_count else 1
         
-        for _ in range(matches_count):
-            stage_name = f"Групповой Этап {position}"
+        for _ in range(rounds_count):
+            stage_name = f"Группа {group_number}. Этап {position}"
             stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=position)                    
             for i in range(len(participants)):
                 for j in range(i + 1, len(participants)):
@@ -246,12 +266,15 @@ def create_round_robin_bracket_2step(tournament):
                         stage=stage
                     )
             position += 1
+        group_number += 1
 
-def create_swiss_bracket(tournament, matches_data, participants):
+def create_swiss_bracket(tournament, matches_data, participants:list):
     num_participants = len(participants)
 
+    stage_position_offset = tournament.get_stage_offset() # Для Двуступенчатых турниров
+
     stage_name = "Этап 1"
-    stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=1)
+    stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=1 + stage_position_offset)
 
     random.shuffle(participants)
     for i in range(0, num_participants, 2):
@@ -289,11 +312,13 @@ def create_swiss_bracket(tournament, matches_data, participants):
             )
 
 def create_leaderboard_bracket(tournament):
+    stage_position_offset = tournament.get_stage_offset() # Для Двуступенчатых турниров
+
     # Каждый этап будет как событие(тур) турнира
     rounds_count = max(tournament.rounds_count, 1)
     for i in range(1, rounds_count+1):
         stage_name = f"Этап {i}"
-        TournamentStage.objects.create(name=stage_name, tournament=tournament, position=i)            
+        TournamentStage.objects.create(name=stage_name, tournament=tournament, position=i + stage_position_offset)            
 
 def create_new_swiss_round(stage, tournament):
     participants = list(Participant.objects.filter(tournament=tournament))
@@ -326,50 +351,69 @@ def create_new_swiss_round(stage, tournament):
             stage=stage                
         )
 
-def assign_final_positions(tournament):
-    participants = Participant.objects.filter(tournament=tournament)
+def assign_final_positions(tournament):# TODO
+    qualified_participants = []
+    if tournament.tournament_type == 1:
+        qualified_participants = Participant.objects.filter(tournament=tournament, qualified=True)
+    not_qualified_participants = Participant.objects.filter(tournament=tournament, qualified=False)
     if tournament.check_score_difference_on_draw:
-        participants = sorted(participants, key=lambda x: (x.score, x.get_score_difference()), reverse=True)
-    else:
-        participants = participants.order_by('-score')
+        if qualified_participants:
+            qualified_participants = sorted(qualified_participants, key=lambda x: (x.score, x.get_score_difference()), reverse=True)
+        not_qualified_participants = sorted(not_qualified_participants, key=lambda x: (x.score, x.get_score_difference()), reverse=True)
 
-    for index, participant in enumerate(participants, start=1):
+    else:
+        if tournament.tournament_type == 0:
+            if qualified_participants:
+                qualified_participants = qualified_participants.order_by('-score')
+            not_qualified_participants = not_qualified_participants.order_by('-score')
+        else:
+            if qualified_participants:
+                qualified_participants = qualified_participants.order_by('-final_step_score')
+            not_qualified_participants = not_qualified_participants.order_by('-final_step_score')
+
+    for index, participant in enumerate(qualified_participants, start=1):
         participant.place = index
         participant.save()
 
+    for index, participant in enumerate(not_qualified_participants, start=len(qualified_participants)+1):
+        participant.place = index
+        participant.save()
 
 def assign_final_positions_leaderboard(tournament):
-    participants = []
     stages = TournamentStage.objects.filter(tournament=tournament)
-    
+
     participant_scores = {}
-    
     for stage in stages:
         results = StageResult.objects.filter(stage=stage)
         for result in results:
             participant = result.participant
-            if participant in participant_scores:
-                participant_scores[participant] += result.score
-            else:
-                participant_scores[participant] = result.score
-    
+            participant_scores[participant] = participant_scores.get(participant, 0) + result.score
+
     sorted_participants = sorted(participant_scores.items(), key=lambda x: x[1], reverse=True)
-    
-    position = 1
+
+    if tournament.tournament_type == 1:
+        qualified_participants = [p for p, score in sorted_participants if p.qualified]
+        not_qualified_participants = [p for p, score in sorted_participants if not p.qualified]
+        sorted_participants = qualified_participants + not_qualified_participants
+    else:
+        sorted_participants = [p for p, score in sorted_participants]
+
+    current_position = 1
     prev_score = None
-    for participant, score in sorted_participants:
-        if score != prev_score:
-            position += 1
-        participant.place = position
+    for participant in sorted_participants:
+        if participant_scores[participant] != prev_score:
+            participant.place = current_position
+        prev_score = participant_scores[participant]
         participant.save()
-        prev_score = score
+        current_position += 1
 
-    return participants
-
-
-def assign_final_positions_single_elimination(tournament):
+def assign_final_positions_single_elimination(tournament:Tournament):
     stages = TournamentStage.objects.filter(tournament=tournament).order_by('-position')  # Получаем этапы в обратном порядке
+    end = len(stages) - tournament.group_stages_count()
+    count = 0
     for place, stage in enumerate(stages, start=1):
+        if count == end and tournament.bracket == 1:
+            break
         matches = Match.objects.filter(stage=stage)
         for current_match in matches:
             if current_match.winner:
@@ -382,10 +426,15 @@ def assign_final_positions_single_elimination(tournament):
                 if loser and not loser.place:
                     loser.place = place + 1
                     loser.save()
+        count += 1
 
 def assign_final_positions_double_elimination(tournament):
     stages = TournamentStage.objects.filter(tournament=tournament).order_by('-position')
+    end = len(stages) - tournament.group_stages_count()
+    count = 0
     for place, stage in enumerate(stages, start=1):
+        if count == end and tournament.tournament_type == 1:
+            break
         matches = Match.objects.filter(stage=stage)
         for current_match in matches:
             if current_match.winner:
@@ -398,6 +447,29 @@ def assign_final_positions_double_elimination(tournament):
                 if loser and not loser.place:
                     loser.place = place + 1
                     loser.save()
+        count += 1
+
+def assign_final_positions_group_stage(tournament):
+    qualified_count = Participant.objects.filter(tournament=tournament, qualified=True).count()
+    starting_position = qualified_count + 1
+
+    non_qualified_participants = Participant.objects.filter(
+        tournament=tournament, 
+        qualified=False
+    ).order_by('-score')
+
+    for index, participant in enumerate(non_qualified_participants, start=starting_position):
+        participant.place = index
+        participant.save()
+
+def save_stage_score(participant, stage, score):
+    if participant:
+        try:
+            result = StageResult.objects.get(stage=stage, participant=participant)
+            result.score = score 
+            result.save()                               
+        except:
+            StageResult.objects.create(stage=stage, participant=participant, score=score)
 
 def print_tournament_bracket(tournament_id):
     try:

@@ -33,7 +33,7 @@ from main.services.img_functions import _decode_photo
 from django.db.models import Min, Max
 from django.db.models import Count
 
-from main.services.tournament import assign_final_positions_leaderboard, create_double_elimination_bracket, create_leaderboard_bracket, create_new_swiss_round, create_round_robin_bracket, create_round_robin_bracket_2step, create_single_elimination_bracket, create_swiss_bracket
+from main.services.tournament import assign_final_positions_group_stage, assign_final_positions_leaderboard, create_double_elimination_bracket, create_leaderboard_bracket, create_new_swiss_round, create_round_robin_bracket, create_round_robin_bracket_2step, create_single_elimination_bracket, create_swiss_bracket, print_next_matches_for_tournament, print_tournament_bracket, save_stage_score
 
 from main.services.tournament import assign_final_positions, assign_final_positions_double_elimination, assign_final_positions_single_elimination
 
@@ -150,7 +150,8 @@ class UpdateTournament(APIView):
                         },
                         required=['id']
                     ),
-                ),                
+                ),  
+                "stage_id": openapi.Schema(type=openapi.TYPE_INTEGER, description='id Этапа (если не передавать то изменится последний не измененный этап)')               
             }
         ),
         responses={
@@ -179,10 +180,14 @@ class UpdateTournament(APIView):
             data = json.loads(request.body)
             matches_data = data.get("matches", [])
             results_data = data.get("results", [])
+            stage_id = data.get("stage_id", None)
 
             tournament = Tournament.objects.get(id=id)
 
-            stage = tournament.get_active_stage()
+            if stage_id:
+                stage = TournamentStage.objects.get(id=stage_id)
+            else:
+                stage = tournament.get_active_stage()
 
             if results_data and stage:             
                 for result_data in results_data:
@@ -192,13 +197,8 @@ class UpdateTournament(APIView):
 
                     participant = Participant.objects.get((Q(user__id=participant_id) | Q(team__id=participant_id)) & Q(tournament=tournament))
                     score = result_data.get("score", 0)
-                    try:
-                        result = StageResult.objects.get(stage=stage, participant=participant)
-                        result.score = score
-                        result.save()
-                    except:
-                        result = StageResult.objects.create(stage=stage, participant=participant, score=score)
-
+                    save_stage_score(participant, stage, score)
+                    
             for match_data in matches_data:
                 match = get_object_or_404(Match, pk=match_data.get("id"))
                 
@@ -207,7 +207,7 @@ class UpdateTournament(APIView):
                 match.actual_end = match_data.get("actual_end", match.actual_end)
                 participant_1_score = match_data.get("participant_1_score", None)
                 participant_2_score = match_data.get("participant_2_score", None)   
-                                                         
+
                 winner = None
                                                                                 
                 if participant_1_score > participant_2_score:
@@ -226,13 +226,19 @@ class UpdateTournament(APIView):
 
         # except Exception as e:
         #     return Response({'success': False, 'message': f'Ошибка при обновлении: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
 
 class EndTournamentStage(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_description='Завершить этап турнира',
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={                
+                "stage_id": openapi.Schema(type=openapi.TYPE_INTEGER, description='id Этапа')               
+            }
+        ),
         responses={
             "200": openapi.Response(        
                 description='',        
@@ -255,54 +261,95 @@ class EndTournamentStage(APIView):
     })
 
     def post(self, request, id):
-        #try:
-            tournament = Tournament.objects.get(id=id)
-            
-            if tournament.owner != request.user and not tournament.moderators.filter(id=request.user.id).exists():
-                return Response({'success': False, 'message': "Только организатор или модераторы могут завершить этап!"}, status=status.HTTP_403_FORBIDDEN) 
+        #try:        
+            data = json.loads(request.body)
+            stage_id = data.get("stage_id", None)
 
-            active_stage = tournament.get_active_stage()
+            tournament = Tournament.objects.get(id=id)
+
+            if stage_id:
+                active_stage = TournamentStage.objects.get(id=stage_id)
+            else:
+                active_stage = tournament.get_active_stage()
+
             if not active_stage:
                 return Response({'success': False, 'message': "Турнир уже завершен или нет активного этапа!"}, status=status.HTTP_400_BAD_REQUEST) 
 
+            if tournament.owner != request.user and not tournament.moderators.filter(id=request.user.id).exists():
+                return Response({'success': False, 'message': "Только организатор или модераторы могут завершить этап!"}, status=status.HTTP_403_FORBIDDEN) 
+            
+            stages_count = TournamentStage.objects.filter(tournament=tournament).count()
+            group_stages_count = tournament.group_stages_count()
+            group_stage_ended = ((tournament.tournament_type == 1) and (stages_count > group_stages_count) or tournament.tournament_type == 0)
+
             matches = Match.objects.filter(stage=active_stage)
-            if not all(match.status == 2 for match in matches):  # Проверяем, завершены ли все матчи
+            if group_stage_ended and tournament.bracket != 4 and not all(match.status == 2 for match in matches):  # Проверяем, завершены ли все матчи
                 return Response({'success': False, 'message': "Не все матчи этапа завершены!"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not active_stage.ended:
+                for match in matches:
+                    self.set_scores(match)
 
-            if tournament.bracket == 3 and tournament.stages.count() < tournament.rounds_count:
-                # Swiss or other multi-round bracket logic
-                if all(match.status == 2 for match in matches):
-                    stages_count = TournamentStage.objects.filter(tournament=tournament).count()
-                    if stages_count < tournament.rounds_count:
-                        new_stage = TournamentStage.objects.create(
-                            name=f"Этап {tournament.stages.count() + 1}",
-                            tournament=tournament,
-                            position=stages_count+1
-                        )
-                        create_new_swiss_round(new_stage, tournament)
-                        tournament.active_stage_position += 1
-                    else:
-                        assign_final_positions(tournament)
-            elif tournament.bracket == 4:
-                if tournament.active_stage_position == tournament.rounds_count:
-                    assign_final_positions_leaderboard(tournament)
-                else:
-                    tournament.active_stage_position += 1
-
-            elif not tournament.has_next_stage():
+                if group_stage_ended:
+                    if tournament.bracket in [0, 1]:
+                        # Proceed to next stage
+                        for match in matches:                                                                                                                     
+                            self.process_match_winner_to_next_stage(match, tournament.bracket)
+                    # Пропускаем эти сетки так как их уже обработали выше
+                    # elif tournament.bracket in [2, 4]:                                                        
+                    #     pass
+                    elif tournament.bracket == 3:                    
+                        # Swiss or other multi-round bracket logic                                                                
+                        should_create_next_round = False
+                        if tournament.tournament_type == 0:
+                            should_create_next_round = tournament.rounds_count > stages_count
+                        else: 
+                            should_create_next_round = (tournament.active_stage_position != group_stages_count + tournament.final_stages_count())
+                        
+                        if should_create_next_round:
+                            new_stage = TournamentStage.objects.create(
+                                name=f"Этап {active_stage.position - group_stages_count + 1}",
+                                tournament=tournament,
+                                position=active_stage.position+1
+                            )
+                            create_new_swiss_round(new_stage, tournament)                                
+                
+                tournament.active_stage_position += 1
+            
+            active_stage.ended = True
+            active_stage.save()
+                    
+            # Если групповой этап окончен создаем финальный
+            if tournament.tournament_type == 1 and tournament.all_stages_ended() and stages_count == group_stages_count:
+                tournament.set_qualified_participants()
+                qualified_participants = tournament.get_qualified_participants()
+                # print(qualified_participants)
+                if tournament.bracket == 0:
+                    create_single_elimination_bracket(tournament, [], list(qualified_participants))
+                elif tournament.bracket == 1:
+                    create_double_elimination_bracket(tournament, [], list(qualified_participants)) 
+                elif tournament.bracket == 2: 
+                    create_round_robin_bracket(tournament, qualified_participants)
+                elif tournament.bracket == 3: 
+                    create_swiss_bracket(tournament, [], list(qualified_participants))
+                elif tournament.bracket == 4: 
+                    create_leaderboard_bracket(tournament)
+            
+            # Если турнир окончен
+            if not tournament.has_next_stage(active_stage):
                 if tournament.bracket == 0:  # Single elimination
                     assign_final_positions_single_elimination(tournament)
                 elif tournament.bracket == 1:  # Double elimination
                     assign_final_positions_double_elimination(tournament)
-                else:
+                elif tournament.bracket == 4: # Leaderboard
+                    assign_final_positions_leaderboard(tournament)
+                else: # Swiss, Round Robin
                     assign_final_positions(tournament)
+
+                if tournament.tournament_type == 1:
+                    assign_final_positions_group_stage(tournament)
+
                 return Response({'success': True, 'message': "Турнир завершен!"}, status=status.HTTP_200_OK)
-            else:
-                # Proceed to next stage
-                current_stage_matches = matches
-                for match in current_stage_matches:
-                    self.process_match_winner_to_next_stage(match, tournament.bracket)
-                tournament.active_stage_position += 1
 
             tournament.save()
             return Response({'success': True, 'message': "Этап турнира завершен!"}, status=status.HTTP_200_OK)
@@ -329,6 +376,32 @@ class EndTournamentStage(APIView):
                     match.next_lose_match.participant2 = loser
                 match.next_lose_match.save()
 
+    def set_scores(self, match):        
+        active_stage = match.stage
+        tournament = active_stage.tournament
+        
+        is_draw = match.participant1_score == match.participant2_score        
+
+        # Увеличиваем очки победителям
+        if tournament.tournament_type == 1 and active_stage.position < (tournament.groups_count() * tournament.rounds_count):
+            # Если турнир двуступенчатый и завершается этап из финальной стадии
+            if is_draw:
+                save_stage_score(match.participant1, active_stage, tournament.group_stage_draw_points)
+                save_stage_score(match.participant2, active_stage, tournament.group_stage_draw_points)
+            else:
+                save_stage_score(match.winner, active_stage, tournament.group_stage_win_points)         
+        elif tournament.tournament_type == 1:
+            if is_draw:
+                save_stage_score(match.participant1, active_stage, tournament.draw_points)         
+                save_stage_score(match.participant2, active_stage, tournament.draw_points)                         
+            else:
+                save_stage_score(match.winner, active_stage, tournament.win_points)         
+        else:
+            if is_draw:
+                save_stage_score(match.participant1, active_stage, tournament.draw_points)         
+                save_stage_score(match.participant2, active_stage, tournament.draw_points)                         
+            else:
+                save_stage_score(match.winner, active_stage, tournament.win_points)         
     
     
 class JoinTournament(APIView):
@@ -835,9 +908,13 @@ class CreateTournamentBracket(APIView):
             tournament = Tournament.objects.get(id=id)            
 
             participants = list(Participant.objects.filter(tournament=tournament))
-            
+            stages_count = TournamentStage.objects.filter(tournament=tournament).count()
             if tournament.tournament_type == 1:  # Двуступенчатый турнир
-                create_round_robin_bracket_2step(tournament)
+                if stages_count == 0:
+                    create_round_robin_bracket_2step(tournament)
+                else:
+                    participants = []
+
 
             elif tournament.bracket == 0:  # Single Elimination
                 create_single_elimination_bracket(tournament, matches_data, participants)

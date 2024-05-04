@@ -1,9 +1,12 @@
+import math
+from turtle import position
 from django.db import models
 from main.enums import MATCH_STATUS, TOURNAMENT_TYPE, TOURNAMENT_BRACKET_TYPE, REGISTER_OPEN_UNTIL
 from main.models import User
 from main.all_models.sport import Sport
 from main.all_models.team import Team
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models import Sum
  
 
 class Tournament(models.Model):
@@ -59,19 +62,82 @@ class Tournament(models.Model):
     group_stage_draw_points = models.FloatField(blank=True, null=True, verbose_name='Очки за ничью (Групповой этап)')
     group_stage_rounds_count = models.IntegerField(blank=True, null=True, verbose_name='Кол-во туров (Групповой этап)', validators=[MinValueValidator(1), MaxValueValidator(20)],)
 
-
+    def get_stage_offset(self):    
+        """Возвращает оффсет позиции этапов для Двуступенчатых турниров"""
+        stage_position_offset = 0
+        if TournamentStage.objects.filter(tournament=self).exists() and self.tournament_type == 1: 
+            # Если создается финальный этап Двуступенчатого турнира
+            groups_count = self.max_participants // self.participants_in_group
+            stage_position_offset = groups_count * self.rounds_count
+        return stage_position_offset
+    
     def get_active_stage(self):
         try:
             return TournamentStage.objects.get(tournament=self, position=self.active_stage_position)
         except:
             return None
         
-    def has_next_stage(self):
-        try:
-            TournamentStage.objects.get(tournament=self, position=(self.active_stage_position+1))
-            return True
-        except:
-            return False     
+    def has_next_stage(self, current_stage=None):
+        if not current_stage:
+            try:
+                TournamentStage.objects.get(tournament=self, position=(self.active_stage_position+1))
+                return True
+            except:
+                return False
+        else:
+            try:
+                TournamentStage.objects.get(tournament=self, position=(current_stage.position+1))                
+                return True
+            except:
+                return False
+
+    def all_stages_ended(self):
+        return not TournamentStage.objects.filter(tournament=self, ended=False).exists()
+
+    def set_qualified_participants(self):
+        """Меняет список участников, которые прошли отбор из групповой стадии"""                
+        for group_number in range(self.groups_count()):
+            first_stage_pos = group_number * self.rounds_count + 1
+            last_stage_pos = (group_number + 1) * self.rounds_count
+
+            group_participants = (
+                Participant.objects
+                .filter(stage_results__stage__tournament=self,
+                        stage_results__stage__position__gte=first_stage_pos,
+                        stage_results__stage__position__lte=last_stage_pos)
+                .annotate(total_score=Sum('stage_results__score'))
+                .order_by('-total_score')
+                .distinct()
+                [:self.final_stage_advance_count]
+            )
+
+            for participant in group_participants:
+                participant.qualified = True
+                participant.save()
+    
+    def get_qualified_participants(self):
+        return Participant.objects.filter(tournament=self, qualified=True)
+        
+    def groups_count(self):
+        return self.max_participants // self.participants_in_group
+
+    def group_stages_count(self):
+        """Возвращает количество этапов Групповой стадии двуступенчтатого турнира"""
+        return self.groups_count() * self.rounds_count
+
+    def final_stages_count(self):
+        qualified_participants_count = self.get_qualified_participants().count()
+        if self.bracket == 0:
+            return math.ceil(math.log2(qualified_participants_count))
+        elif self.bracket == 1:
+            num_rounds_upper = math.ceil(math.log2(qualified_participants_count))
+            num_rounds_lower = 2 * (num_rounds_upper) - 1
+            return num_rounds_lower + num_rounds_upper
+        elif self.bracket in [2, 3, 4]:
+            return self.rounds_count
+    
+    def get_group_stages(self):
+        return TournamentStage.objects.filter(tournament=self).order_by('position')[:self.group_stages_count()]
 
     def get_places(self):
         """Возвращает список участников и их мест на турнире"""
@@ -113,7 +179,8 @@ class TournamentStage(models.Model):
     name = models.CharField(max_length=255, verbose_name='Название этапа')
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='stages', verbose_name='Турнир этапа')
     position = models.IntegerField(default=1, verbose_name='Позиция этапа (какой он идёт по счету)')
-
+    ended = models.BooleanField(default=False, verbose_name='Завершен ли этап')
+    
     class Meta:
         verbose_name = 'Этап турнира'
         verbose_name_plural = 'Этапы турниров'
@@ -127,9 +194,12 @@ class Participant(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE, blank=True, null=True)
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='participants', verbose_name='Учатник турнира')
     place = models.IntegerField(blank=True, null=True, verbose_name="Место в турнире")
-    
+    qualified = models.BooleanField(default=False, verbose_name='Вышел ли из групповой стадии')
     # Swiss, Leaderboard
     score = models.FloatField(default=0.0, verbose_name="Общий счет")
+    
+    # Two step Tournament
+    final_step_score = models.FloatField(default=0.0, verbose_name="Общий счет в финальной группе")
     
     class Meta:
         verbose_name = 'Участник турнира'

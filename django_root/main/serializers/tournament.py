@@ -173,6 +173,7 @@ class TournamentSerializer(serializers.ModelSerializer):
     stages = TournamentStageSerializer(many=True, read_only=True)
 
     is_registration_available = serializers.SerializerMethodField()
+    qualified_participants = serializers.SerializerMethodField()
 
     class Meta:
         model = Tournament
@@ -183,11 +184,11 @@ class TournamentSerializer(serializers.ModelSerializer):
                     'win_points', 'draw_points', 'rounds_count', 'mathces_count', 'BO_number', 'group_stage_BO_number', 'final_BO_number',
                     'final_stage_advance_count', 'participants_in_group', 'check_score_difference_on_draw',
                     'requests', 'prize_pool', 'first_place_prize', 'second_place_prize', 'third_place_prize',
-                    'city', 'rules', 'tournament_type', 'bracket', 'players', 'stages']                  
+                    'city', 'rules', 'tournament_type', 'bracket', 'players', 'qualified_participants', 'stages']                  
 
     def __init__(self, *args, **kwargs):
         super(TournamentSerializer, self).__init__(*args, **kwargs)
-        required_fields = ['name', 'start', 'end', 'bracket', 'tournament_type']
+        required_fields = ['name', 'start', 'end', 'bracket', 'tournament_type', 'address', 'city']
 
         # Устанавливаем поля из списка как обязательные
         for field_name in required_fields:
@@ -252,6 +253,11 @@ class TournamentSerializer(serializers.ModelSerializer):
         REGISTER_OPEN_UNTIL_DICT = dict(REGISTER_OPEN_UNTIL)
         registration_end_time = obj.start - REGISTER_OPEN_UNTIL_DICT.get(obj.register_open_until, timedelta(minutes=15))
         return timezone.now() < registration_end_time
+
+    def get_qualified_participants(self, obj):
+        qualified_participants = obj.get_qualified_participants()
+        serializer = ParticipantTournamentListSerializer(qualified_participants, many=True)
+        return serializer.data
 
     def get_photos(self, obj):
         photos_data = [TournamentPhotoSerializer(photo).data['photo'] for photo in obj.photos.all()]
