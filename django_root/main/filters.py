@@ -2,6 +2,7 @@ import django_filters
 from main.all_models.match import AmateurMatch
 from main.all_models.tournament import Tournament, Team
 from main.models import User
+from django.db.models import Q
 
 class AmateurMatchFilter(django_filters.FilterSet):
     name = django_filters.CharFilter(lookup_expr='icontains')
@@ -52,12 +53,23 @@ class TeamFilter(django_filters.FilterSet):
         model = Team
         fields = ['name', 'sport']
 
-
 class UserFilter(django_filters.FilterSet):
-    first_name = django_filters.CharFilter(lookup_expr='icontains')
-    suname = django_filters.CharFilter(lookup_expr='icontains')
-    last_name = django_filters.CharFilter(lookup_expr='icontains')
-    
+    fullname = django_filters.CharFilter(method='filter_fullname')
+
     class Meta:
         model = User
-        fields = ['first_name', 'suname', 'last_name']
+        fields = []
+
+    def filter_fullname(self, queryset, name, value):
+        """
+        Custom filter method to search users by splitting the input 'fullname' into parts and
+        searching these parts across first_name, surname, and last_name fields.
+        """
+        name_parts = value.split()
+        queries = [Q(first_name__icontains=part) | Q(surname__icontains=part) | Q(last_name__icontains=part) for part in name_parts]
+
+        query = queries.pop()
+        for item in queries:
+            query |= item
+
+        return queryset.filter(query)

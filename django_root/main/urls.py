@@ -6,7 +6,7 @@ from main.views.amateur_match import AcceptMatch, AcceptMatchRequest, AddMatchPa
 from main.views.city import CityRequest
 from main.views.sport import SportViewSet
 from main.views.tournament import EndTournamentStage, AcceptTournament, AcceptTournamentRequest, AddTournamentParticipants, DeclineTournament, DeleteTournamentParticipants, GetTournamentsPrices, JoinTournament, LeaveTournament, RefuseTournamentRequest, SetTournamentModerators, TournamentViewSet, UpdateTournament, CreateTournamentBracket
-from main.views.user import UserViewSet
+from main.views.user import UserViewSet, UserDetail
 
 from main.views.auth import Login, RestorePassword, UserExists
 from main.views.auth import Register
@@ -21,7 +21,7 @@ router.register(r'teams', TeamViewSet)
 router.register(r'users', UserViewSet)
 
 urlpatterns = [
-    # path('user/', UserDetail.as_view(), name='user_detail'),
+    path('user/', UserDetail.as_view(), name='user_detail'),
     path('user/exists/', UserExists.as_view(), name='user_exists'),
 
     path('auth/login/', Login.as_view(), name='login'),
