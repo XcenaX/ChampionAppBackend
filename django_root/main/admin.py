@@ -10,19 +10,38 @@ from main.all_models.user import *
 # Register your models here.
 
 # User Group
-admin.site.register(User)
+class UserAdmin(admin.ModelAdmin):
+    list_display = ['email', 'first_name', 'last_name', 'surname']
+    search_fields = ['email', 'first_name', 'last_name', 'surname']
+    filter_horizontal = ['interested_sports']
+
+admin.site.register(User, UserAdmin)
 admin.site.register(Sport)
 
 # Subscription Group
+
 admin.site.register(Subscription)
 admin.site.register(Plan)
 admin.site.register(Transaction)
 
 # Tournament Group
-admin.site.register(Tournament)
-admin.site.register(TournamentStage)
+class TournamentAdmin(admin.ModelAdmin):
+    list_display = ['name', 'city', 'sport', 'start', 'end']
+    search_fields = ['name', 'city', 'description', 'surname', 'start', 'end', 'sport__name', 'enter_prize', 'prize_pool']
+    filter_horizontal = ['users_requests', 'teams_requests', 'moderators']
+
+class TournamentStageAdmin(admin.ModelAdmin):
+    list_display = ['name', 'tournament', 'start', 'end']
+    search_fields = ['name', 'tournament__name', 'start', 'end']
+
+class MatchAdmin(admin.ModelAdmin):
+    list_display = ['participant1', 'participant2', 'stage']
+    search_fields = ['stage__name']
+
+admin.site.register(Tournament, TournamentAdmin)
+admin.site.register(TournamentStage, TournamentStageAdmin)
 admin.site.register(StageResult)
-admin.site.register(Match)
+admin.site.register(Match, MatchAdmin)
 admin.site.register(MatchPhoto)
 admin.site.register(Participant)
 admin.site.register(New)

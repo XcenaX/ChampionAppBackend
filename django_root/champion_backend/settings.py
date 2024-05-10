@@ -78,6 +78,16 @@ INSTALLED_APPS = [
     'main.apps.MainConfig',
 ]
 
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'in': 'header',
+            'name': 'Authorization'
+        }
+    },
+}
+
 AUTH_USER_MODEL = 'main.User'
 
 ACCESS_TOKEN_LIFETIME = int(os.getenv("ACCESS_TOKEN_LIFETIME", 5))

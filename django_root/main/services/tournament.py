@@ -3,20 +3,71 @@ from turtle import position
 from main.all_models.tournament import StageResult, TournamentStage, Match, Participant, Tournament
 import random
 
+def get_participants_from_matches_data(matches_data: list, tournament, available_participants):
+    match_info = None
+    try:
+        match_info = matches_data.pop()
+    except:
+        pass
+    
+    participants_ids = []
+    if match_info:
+        participants_ids = match_info.get('participants', [])
+    
+    extracted_participants = []
+    for pid in participants_ids:
+        if tournament.is_team_tournament:
+            participant = next((p for p in available_participants if p.team.id == pid), None)
+        else:
+            participant = next((p for p in available_participants if p.user.id == pid), None)
+        
+        if participant:
+            available_participants.remove(participant)
+            extracted_participants.append(participant)
+    
+    while len(extracted_participants) < 2:
+        if available_participants:
+            extracted_participants.append(available_participants.pop())
+        else:
+            extracted_participants.append(None)
+    
+    return extracted_participants[0], extracted_participants[1], match_info
+
 def create_single_elimination_bracket(tournament, matches_data, participants:list):
-    num_participants = tournament.max_participants
-    if tournament.tournament_type == 1:
-        num_participants = len(participants)
+    num_participants = len(participants)
+    target_participants = 2**math.ceil(math.log2(num_participants)) // 2
     if num_participants == 0:
         num_rounds = 0
     else:
-        num_rounds = math.ceil(math.log2(num_participants))
+        num_rounds = math.ceil(math.log2(target_participants))
     current_matches = []
     
-    num_matches_in_round_one = num_participants // 2
+    preliminary_needed = False
+    if num_participants != target_participants:
+        preliminary_needed = True
+        num_preliminary_matches = num_participants - target_participants
+
+    num_matches_in_round_one = target_participants // 2
     
     stage_position = 1
     stage_position_offset = tournament.get_stage_offset()
+
+    if preliminary_needed:
+        stage_name = get_stage_name(0, num_rounds)
+        stage = TournamentStage.objects.create(name=stage_name, tournament=tournament, position=stage_position + stage_position_offset)
+        stage_position += 1
+        for i in range(num_preliminary_matches):
+            # match_info = matches_data[i] if i < len(matches_data) else None
+            
+            participant1, participant2, match_info = get_participants_from_matches_data(matches_data, tournament, participants)
+            
+            match = Match.objects.create(
+                participant1=participant1,
+                participant2=participant2,
+                scheduled_start=match_info.get("scheduled_start", None),
+                stage=stage
+            )
+            current_matches.append(match)
 
     for round_number in range(1, num_rounds + 1):
         stage_name = get_stage_name(round_number, num_rounds)
@@ -27,31 +78,12 @@ def create_single_elimination_bracket(tournament, matches_data, participants:lis
         match_count = 0
         if round_number == 1:
             for i in range(num_matches_in_round_one):
-                match_info = matches_data[i] if i < len(matches_data) else None
-                scheduled_start = None
-                participants_ids = []
-                if match_info:
-                    scheduled_start = match_info.get('scheduled_start')
-                    participants_ids = match_info.get('participants', [])
-                
-                participant1 = None
-                participant2 = None
+                if not participants:
+                    break
+                # match_info = matches_data[i + num_preliminary_matches] if (i + num_preliminary_matches) < len(matches_data) else None
+                participant1, participant2, match_info = get_participants_from_matches_data(matches_data, tournament, participants)
 
-                if participants_ids:
-                    if tournament.is_team_tournament:
-                        participant1 = next((p for p in participants if p.team.id == participants_ids[0]), None)
-                        participant2 = next((p for p in participants if p.team.id == participants_ids[1]), None)
-                    else:
-                        participant1 = next((p for p in participants if p.user.id == participants_ids[0]), None)
-                        participant2 = next((p for p in participants if p.user.id == participants_ids[1]), None)
-
-                    if participant1:
-                        participants.remove(participant1)
-                    if participant2:
-                        participants.remove(participant2)
-                else:
-                    participant1 = participants.pop() if participants else None
-                    participant2 = participants.pop() if participants else None
+                scheduled_start = None if not match_info else match_info.get("scheduled_start", None)                
 
                 match = Match.objects.create(
                     scheduled_start=scheduled_start,
@@ -60,7 +92,19 @@ def create_single_elimination_bracket(tournament, matches_data, participants:lis
                     stage=stage
                 )
                 new_matches.append(match)
-                match_count += 1                 
+                match_count += 1  
+            
+            i = 0
+            if current_matches:
+                for match in new_matches:
+                    if not match.participant1:
+                        current_matches[i].next_match = match
+                        current_matches[i].save()
+                        i += 1
+                    if not match.participant2:
+                        current_matches[i].next_match = match
+                        current_matches[i].save()
+                        i += 1
         else:
             for i in range(0, len(current_matches), 2):
                 new_match = Match.objects.create(stage=stage)
@@ -83,14 +127,20 @@ def get_stage_name(round_number, num_rounds):
         return f"Этап {round_number}"
 
 def create_double_elimination_bracket(tournament, matches_data, participants:list):
-    num_participants = tournament.max_participants
-    if tournament.tournament_type == 1:
-        num_participants = len(participants)
-    num_rounds_upper = math.ceil(math.log2(num_participants))
+    num_participants = len(participants)
+    target_participants = 2**math.ceil(math.log2(num_participants)) // 2
+    num_rounds_upper = math.ceil(math.log2(target_participants))
     num_rounds_lower = 2 * (num_rounds_upper) - 2
     
     stage_position_offset = tournament.get_stage_offset() # Для Двуступенчатых турниров
     
+    preliminary_needed = False
+    need_create_additional_stage = False
+    if num_participants != target_participants:
+        preliminary_needed = True
+        num_preliminary_matches = num_participants - target_participants
+        need_create_additional_stage = num_preliminary_matches > target_participants // 2
+        
     # Создаем этапы верхней и нижней сетки
     upper_stages = [
         TournamentStage.objects.create(
@@ -104,6 +154,68 @@ def create_double_elimination_bracket(tournament, matches_data, participants:lis
         ) for i in range(num_rounds_lower)
     ]
 
+    if target_participants != num_participants:
+        position = -1
+        new_upper_stage = TournamentStage.objects.create(name=f"Верхняя сетка - Предварительный Этап 1", tournament=tournament, position=position)
+        # upper_stages.append(new_upper_stage)
+        additional_upper_matches = []
+        for i in range(num_preliminary_matches):
+            participant1, participant2, match_info = get_participants_from_matches_data(matches_data, tournament, participants)
+            match = Match.objects.create(
+                participant1=participant1,
+                participant2=participant2,
+                scheduled_start=match_info.get("scheduled_start", None),
+                stage=new_upper_stage
+            )
+            additional_upper_matches.append(match)
+
+        position = 1
+        new_lower_stage = TournamentStage.objects.create(name=f"Нижняя сетка - Предварительный Этап 2", tournament=tournament, position=position)
+        # lower_stages.append(new_lower_stage)
+        additional_lower_matches = []
+
+        for i in range(min(target_participants // 2, num_preliminary_matches)):
+            match = Match.objects.create(stage=new_lower_stage)
+            additional_upper_matches[i].next_lose_match = match
+            additional_upper_matches[i].save()
+            additional_lower_matches.append(match)
+        
+        if need_create_additional_stage:
+            upper_stages[0].position = 0
+            upper_stages[0].save()
+            new_upper_stage.position = -2
+            new_upper_stage.save()
+            position = -1
+            
+            new_lower_stage2 = TournamentStage.objects.create(name=f"Нижняя сетка - Предварительный Этап 1", tournament=tournament, position=position)
+            # lower_stages.append(new_lower_stage2)
+            new_lower_stage.position = 1
+            new_lower_stage.save()           
+         
+            additional_upper_matches_len = len(additional_upper_matches)
+            for i in range(target_participants // 2, num_preliminary_matches):
+                match = Match.objects.create(stage = new_lower_stage2)
+                
+                next_match_set = False
+                count = 0
+                while not next_match_set:
+                    if not additional_lower_matches[count].participant1 or not additional_lower_matches[count].participant2:
+                        match.next_match = additional_lower_matches[count]
+                        match.save()
+                        next_match_set = True
+                    count += 1
+
+                additional_upper_matches[additional_upper_matches_len-1].next_lose_match = match
+                additional_upper_matches[additional_upper_matches_len-1].save()
+
+                additional_upper_matches[additional_upper_matches_len-2].next_lose_match = match
+                additional_upper_matches[additional_upper_matches_len-2].save()
+
+                additional_upper_matches_len -= 2
+
+              
+                
+
     # Фиксим позиции этапов если надо
     previous_stage = None
     for stage in TournamentStage.objects.filter(tournament=tournament).order_by("position"):
@@ -112,30 +224,34 @@ def create_double_elimination_bracket(tournament, matches_data, participants:lis
                 stage.position = previous_stage.position + 1
                 stage.save()
         previous_stage = stage 
-    
-    # lower_stages[-1].position -= 1
-    # lower_stages[-1].save()
 
     # Создаем матчи для первого раунда верхней сетки
-    for i in range(0, num_participants, 2):
-        participants_ids = matches_data[i // 2]['participants'] if i // 2 < len(matches_data) else None
-        scheduled_start = matches_data[i // 2].get('scheduled_start', None) if i // 2 < len(matches_data) else None
-        participant1 = None
-        participant2 = None
+    count = 0
+    for i in range(target_participants // 2):
+        participant1, participant2, match_info = get_participants_from_matches_data(matches_data, tournament, participants)
+        if match_info:
+            scheduled_start = match_info.get('scheduled_start', None)
 
-        if participants_ids:
-            participant1 = next((p for p in participants if p.id == participants_ids[0]), None)
-            participant2 = next((p for p in participants if p.id == participants_ids[1]), None)
-        else:
-            participant1 = participants.pop(0) if participants else None
-            participant2 = participants.pop(0) if participants else None
-
-        Match.objects.create(
+        match = Match.objects.create(
             stage=upper_stages[0],
             scheduled_start=scheduled_start,
             participant1=participant1,
             participant2=participant2
         )
+
+        if count < len(additional_upper_matches) and not participant1:            
+                additional_upper_matches[count].next_match = match
+                additional_upper_matches[count].save()
+                count += 1
+        
+        if count < len(additional_upper_matches) and not participant2:            
+                additional_upper_matches[count].next_match = match
+                additional_upper_matches[count].save()
+                count += 1
+
+        if i < len(additional_lower_matches):
+            match.next_lose_match = additional_lower_matches[i]
+            match.save()
 
     # Матчи для верхней сетки
     for stage_index in range(1, num_rounds_upper):
@@ -143,7 +259,8 @@ def create_double_elimination_bracket(tournament, matches_data, participants:lis
         for i in range(0, len(previous_stage_matches), 2):
             match = Match.objects.create(
                 stage=upper_stages[stage_index]
-            )
+            )            
+
             previous_stage_matches[i].next_match = match
             previous_stage_matches[i].save()
             if len(previous_stage_matches) > 1:
@@ -157,13 +274,34 @@ def create_double_elimination_bracket(tournament, matches_data, participants:lis
         if stage_index == 0:
             # Первый этап нижней сетки - проигравшие первого раунда верхней сетки
             upper_first_round_matches = Match.objects.filter(stage=upper_stages[0])
+            count = 0
             for i in range(0, len(upper_first_round_matches), 2):                
                 new_match = Match.objects.create(stage=current_stage)
-                upper_first_round_matches[i].next_lose_match = new_match
-                upper_first_round_matches[i].save()
-                if len(upper_first_round_matches) > 1:
-                    upper_first_round_matches[i + 1].next_lose_match = new_match
-                    upper_first_round_matches[i + 1].save()
+                
+                next_lose_match_set1 = False                
+                next_lose_match_set2 = False                
+                while not next_lose_match_set1 and not next_lose_match_set2:
+                    if i >= len(upper_first_round_matches):
+                        next_lose_match_set1 = True
+                    elif not upper_first_round_matches[i].next_lose_match: 
+                        upper_first_round_matches[i].next_lose_match = new_match
+                        upper_first_round_matches[i].save()
+                        next_lose_match_set1 = True
+                    if i + 1 >= len(upper_first_round_matches):
+                        next_lose_match_set2 = True
+                    elif not upper_first_round_matches[i + 1].next_lose_match: 
+                        upper_first_round_matches[i + 1].next_lose_match = new_match
+                        upper_first_round_matches[i + 1].save()
+                        next_lose_match_set2 = True
+                    i += 2                 
+                
+                if count < len(additional_lower_matches):
+                    additional_lower_matches[count].next_match = new_match
+                    additional_lower_matches[count].save()
+                if count+1 < len(additional_lower_matches):
+                    additional_lower_matches[count+1].next_match = new_match
+                    additional_lower_matches[count+1].save()
+                count += 2
         elif stage_index % 2 == 0:
             # Этапы, где лузеры играют с лузерами
             previous_lower_stage_matches = Match.objects.filter(stage=lower_stages[stage_index - 1])
@@ -189,9 +327,9 @@ def create_double_elimination_bracket(tournament, matches_data, participants:lis
                 i += 1
 
     # Финальный этап
-    stages_count = TournamentStage.objects.filter(tournament=tournament).count()
+    last_stage_position = TournamentStage.objects.filter(tournament=tournament).order_by("position").last().position
     final_stage = TournamentStage.objects.create(
-        name="Финал", tournament=tournament, position=stages_count + 1
+        name="Финал", tournament=tournament, position=last_stage_position + 1
     )
     final_match = Match.objects.create(
         stage=final_stage,
@@ -211,6 +349,10 @@ def create_double_elimination_bracket(tournament, matches_data, participants:lis
             match.save()
 
     final_match.save()
+    first_stage_position = TournamentStage.objects.filter(tournament=tournament).order_by("position").first().position
+    tournament.active_stage_position = first_stage_position
+    tournament.save()
+
 
 def create_final_match(upper_final_stage, lower_final_stage, tournament):
     stages_count = TournamentStage.objects.filter(tournament=tournament).count()
